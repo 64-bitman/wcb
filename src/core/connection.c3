@@ -2,9 +2,7 @@ module wcb::core::connection;
 
 import wcb::core::types;
 import wcb::core::table @public;
-import std::core::mem::allocators;
 import std::collections::list;
-import std::collections::ringbuffer;
 import libc;
 
 typedef WcbVec = char[];
