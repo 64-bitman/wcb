@@ -8,8 +8,9 @@ import std::collections::ringbuffer;
 import libc;
 
 typedef WcbVec = char[];
+
 alias WcbFdFunc = fn Fd?(sz n_discard, Fd close_fd, void* udata);
-alias WcbWriteFunc = fn sz?(WcbWord[] data, Fd[] fds, sz* fds_sent, void* udata);
+alias WcbWriteFunc = fn sz?(char[] data, Fd[] fds, sz* fds_sent, void* udata);
 
 const uint MAX_MESSAGE_LEN = 4096;
 const uint MAX_MESSAGE_ARGS = 20;
@@ -271,8 +272,14 @@ fn sz? WcbConnection.feed(&self, WcbWord[] buf, WcbFdFunc fd_func, void* udata)
 *>
 fn void? WcbConnection.flush(&self, WcbWriteFunc write_func, void* udata)
 {
-    WcbWord[] buf = self.output.array_view();
-    Fd[] fd_buf = self.fd_output.array_view();
+    char[] buf;
+    Fd[] fd_buf;
+
+    buf = (char[])(((char*)self.output.array_view())[:self.output.len()]);
+    fd_buf = self.fd_output.array_view();
+
+    sz fds_sent = 0;
+    sz? written = write_func(buf, fd_buf, &fds_sent, udata);
 }
 
 <*
@@ -319,7 +326,7 @@ macro WcbConnection.marshal_object(
 
     *buf++ = (WcbWord)obj.id;
     // Message length includes header
-    *buf++ = (WcbWord)((((words * 4 + 8) << 16) | (opcode & 0xffff)));
+    * buf++ = (WcbWord)((((words * 4 + 8) << 16) | (opcode & 0xffff)));
     WcbWord slen;
     sz min;
 

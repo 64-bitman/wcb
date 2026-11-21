@@ -24,7 +24,7 @@ struct WcbTable
     // Objects allocated by the peer.
     List{WcbObject*} peer_objects;
 
-    uint next_free; // Next free slot in "slots"
+    uint next_free;  // Next free slot in "slots"
 }
 
 fn void WcbTable.init(&self, WcbEntity entity, Allocator allocator)
@@ -34,7 +34,7 @@ fn void WcbTable.init(&self, WcbEntity entity, Allocator allocator)
     self.slots.init(allocator, 0);
     self.peer_objects.init(allocator, 0);
 
-    self.next_free = 0; // Bottom bit is unused
+    self.next_free = 0;  // Bottom bit is unused
 }
 
 fn void WcbTable.uninit(&self)
@@ -44,14 +44,14 @@ fn void WcbTable.uninit(&self)
 }
 
 <*
-@param [&own] obj : "Object to insert"
-@return "Newly allocated id for object"
-@return? OBJECT_LIMIT_REACHED
-    *>
+ @param [&own] obj : "Object to insert"
+ @return "Newly allocated id for object"
+ @return? OBJECT_LIMIT_REACHED
+*>
 fn WcbId? WcbTable.insert(&self, WcbObject* obj)
 {
     uint base = self.entity.base_id;
-    uint i    = self.next_free >> 1;
+    uint i = self.next_free >> 1;
     bool full = i == (uint)self.slots.len();
 
     if (full && self.slots.len() >= MAX_OBJECTS)
@@ -84,26 +84,26 @@ fn WcbId? WcbTable.insert(&self, WcbObject* obj)
 }
 
 <*
-"If 'id' is not valid, fault."
+ "If 'id' is not valid, fault."
 
-@return "Entity that this id was created by"
-@return? INVALID_OBJECT_ID
+ @return "Entity that this id was created by"
+ @return? INVALID_OBJECT_ID
 *>
 fn WcbEntity? id_is_valid(
-        WcbId id,
-        WcbEntity entity,
-        WcbTable* table,
-        bool new = false
-        ) @local
+    WcbId id,
+    WcbEntity entity,
+    WcbTable* table,
+    bool new = false
+) @local
 {
     if (id < WcbEntity.CLIENT.base_id
-            || id > WcbEntity.SERVER.base_id + MAX_OBJECTS)
+        || id > WcbEntity.SERVER.base_id + MAX_OBJECTS)
     {
         return INVALID_OBJECT_ID~;
     }
 
     WcbEntity id_entity = id < WcbEntity.SERVER.base_id ? WcbEntity.CLIENT
-        : WcbEntity.SERVER;
+    : WcbEntity.SERVER;
 
     // Check if id is within bounds
     if (id_entity == table.entity)
@@ -137,10 +137,10 @@ fn WcbEntity? id_is_valid(
 }
 
 <*
-@param id : "Id of object"
-@param [&own] obj : "Peer created object"
-@return? INVALID_OBJECT_ID
-    *>
+ @param id : "Id of object"
+ @param [&own] obj : "Peer created object"
+ @return? INVALID_OBJECT_ID
+*>
 fn void? WcbTable.insert_peer(&self, WcbId id, WcbObject* obj)
 {
     WcbEntity id_entity = id_is_valid(id, self.entity, self, true)!;
@@ -163,14 +163,14 @@ fn void? WcbTable.insert_peer(&self, WcbId id, WcbObject* obj)
 }
 
 <*
-"Remove the object with the id from the table. No-op if object does not exist."
+ "Remove the object with the id from the table. No-op if object does not exist."
 
-@return? id_is_valid!
-    *>
+ @return? id_is_valid!
+*>
 fn void? WcbTable.remove(&self, WcbId id)
 {
     WcbEntity id_entity = id_is_valid(id, self.entity, self)!;
-    uint i              = id - id_entity.base_id;
+    uint i = id - id_entity.base_id;
 
     if (id_entity == self.entity)
     {
@@ -198,14 +198,14 @@ fn void? WcbTable.remove(&self, WcbId id)
 }
 
 <*
-"Lookup the object with the id. If object does not exist, return null"
+ "Lookup the object with the id. If object does not exist, return null"
 
-@return? INVALID_OBJECT_ID
-    *>
+ @return? INVALID_OBJECT_ID
+*>
 fn WcbObject*? WcbTable.lookup(&self, WcbId id)
 {
     WcbEntity id_entity = id_is_valid(id, self.entity, self)!;
-    uint i              = id - id_entity.base_id;
+    uint i = id - id_entity.base_id;
 
     if (id_entity == self.entity)
     {
@@ -243,7 +243,7 @@ fn void test_host() @test @public
     table.remove(id1)!!;
     test::eq(table.lookup(id1)!!, null);
 
-    table.remove(id1)!!; // No-op
+    table.remove(id1)!!;  // No-op
     test::eq(table.lookup(id2)!!, &obj2);
 
     // Invalid ids
@@ -275,7 +275,7 @@ fn void test_peer() @test @public
     test::@error(table.insert_peer(obj2.id, &obj2), INVALID_OBJECT_ID);
 
     table.remove(obj1.id)!!;
-    table.remove(obj1.id)!!; // No-op
+    table.remove(obj1.id)!!;  // No-op
     test::eq(table.lookup(obj1.id)!!, null);
 
     table.insert_peer(obj1.id, &obj1)!!;
