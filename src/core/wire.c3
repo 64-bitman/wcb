@@ -17,7 +17,7 @@ union WcbArg
     String s;
     WcbObject o;
     WcbNewId n;
-    WcbWord[] a;
+    char[] a;
     Fd h;
 }
 

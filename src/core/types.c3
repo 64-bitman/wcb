@@ -6,6 +6,14 @@ import libc;
 
 excuse
 {
+    MESSAGE_TOO_BIG,
+    SHORT_MESSAGE,
+    EXPECTED_FD,
+    INVALID_STRING,
+    NULL_OBJECT,
+    NULL_ARRAY,
+    OBJECT_NOT_EXISTS,
+    INVALID_NEW_ID,
     BAD_OPCODE,
 }
 
@@ -75,17 +83,17 @@ interface WcbIOImpl
     // Should return a buffer that must stay valid until read_finish() is
     // called. Return an empty slice if there is no data be read (shouldn't
     // block).
-    fn char[]? read();
+    fn WcbWord[]? read();
     // Called when done using the buffer returned by read(). Passed is the
     // number of words consumed.
     fn void read_finish(sz words_consumed);
 
-    // Return a file descriptor
+    // Return a file descriptor, should return -1 if none
     fn Fd? read_fd();
     // Close the file descriptor
     fn void close_fd(Fd fd);
     // Discard "n" file descriptors
-    fn void discard_fd(sz n);
+    fn void discard_fds(sz n);
 
     // Write "data" to a buffer, but do not send it to the peer
     fn void write(WcbWord[] data);
