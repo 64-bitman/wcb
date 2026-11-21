@@ -6,8 +6,8 @@
     "test-sources": [
         "src/core/**",
         "test/**",
-        "build/client.c3",
-        "build/server.c3"
+        "build/client_protocol.c3",
+        "build/server_protocol.c3"
     ],
     "targets": {
         "wcb_scanner": {
@@ -18,8 +18,8 @@
             "type": "prepare",
             "depends-on": [ "wcb_scanner" ],
             "exec": [
-                "build/wcb_scanner \"wcb::protocol\" client src/protocol/wayland.xml build/client.c3",
-                "build/wcb_scanner \"wcb::protocol\" server src/protocol/wayland.xml build/server.c3"
+                "build/wcb_scanner \"wcb::protocol\" client src/protocol/wayland.xml build/client_protocol.c3",
+                "build/wcb_scanner \"wcb::protocol\" server src/protocol/wayland.xml build/server_protocol.c3"
             ]
         },
         "wcb": {
@@ -27,8 +27,8 @@
             "depends-on": [ "protocol" ],
             "sources": [
                 "src/core/**",
-                "build/client.c3",
-                "build/server.c3"
+                "build/client_protocol.c3",
+                "build/server_protocol.c3"
             ]
         }
     }
