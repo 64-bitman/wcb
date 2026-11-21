@@ -1,46 +1,20 @@
 module wcb::core::types;
 
 import wcb::core::connection;
-import std::core::mem::rc;
 import std::math;
 import libc;
 
 excuse
 {
-    INVALID_MESSAGE_LENGTH,
-    MESSAGE_TOO_LARGE,
-    OBJECT_DOES_NOT_EXIST,
     BAD_OPCODE,
-    BAD_STRING,
-    BAD_OBJECT,
-    NULL_ARG,
-    OBJECT_EXISTS,
-    SHORT_MESSAGE
 }
 
 // Wire types
 alias WcbWord = uint;
 alias WcbHalfWord = ushort;
-
-// Object id
 alias WcbId = uint;
-
-// Protocol versioning
 alias WcbVersion = uint;
-
 typedef WcbFixed = uint;
-
-enum WcbEntity : char (uint base_id, WcbMessageType incoming_type)
-{
-    CLIENT { 0x1, EVENT },
-    SERVER { 0xff000000, REQUEST },
-}
-
-enum WcbMessageType
-{
-    EVENT,
-    REQUEST
-}
 
 enum WcbArgType
 {
@@ -54,18 +28,6 @@ enum WcbArgType
     FD
 }
 
-union WcbArg
-{
-    int i;
-    uint u;
-    WcbFixed f;
-    String s;
-    WcbObject* o;  // May be null
-    WcbObject n;
-    WcbWord[] a;
-    Fd h;
-}
-
 bitstruct WcbArgSignature : char
 {
     WcbArgType type: 0..3;
@@ -74,33 +36,63 @@ bitstruct WcbArgSignature : char
 
 struct WcbMessageDesc
 {
+    // Name of message
     String name;
+
+    // Minimum version of this message
     WcbVersion since;
+
+    // Signature of arguments
     WcbArgSignature[] signature;
+
+    // Interface of object/new_id arguments in "signature"
+    WcbInterface*[] arg_interfaces;
+
+    // Number of fd args in "signature"
     sz n_fd_args;
 }
 
 struct WcbInterface
 {
+    // Name of interface
     String name;
+
+    // Version of interface
     WcbVersion version;
 
     // Events for client, requests for server
     WcbMessageDesc[] messages;
 }
 
-interface WcbObjectImpl
+interface WcbObject
 {
-    fn bool? dispatch(WcbHalfWord opcode, WcbArg[] args) @optional;
-    fn WcbInterface* get_interface() @optional;
+    fn bool? dispatch(WcbHalfWord opcode, args...);
+    fn WcbInterface* get_interface();
 }
 
-struct WcbObject (WcbObjectImpl)
+interface WcbIOImpl
 {
-    WcbId id;
-    WcbVersion version;
+    // Should return a buffer that must stay valid until read_finish() is
+    // called. Return an empty slice if there is no data be read (shouldn't
+    // block).
+    fn char[]? read();
+    // Called when done using the buffer returned by read(). Passed is the
+    // number of words consumed.
+    fn void read_finish(sz words_consumed);
 
-    WcbConnection* ct;
+    // Return a file descriptor
+    fn Fd? read_fd();
+    // Close the file descriptor
+    fn void close_fd(Fd fd);
+    // Discard "n" file descriptors
+    fn void discard_fd(sz n);
+
+    // Write "data" to a buffer, but do not send it to the peer
+    fn void write(WcbWord[] data);
+    // Write an fd to a buffer, but do not send it to the peer
+    fn void write_fd(Fd fd);
+    // Flush all pending data and fds to the peer
+    fn bool? flush();
 }
 
 <* Convert a fixed point to a double *>
@@ -110,9 +102,9 @@ fn double WcbFixed.to_double(self)
 }
 
 <* Get a fixed point from a double *>
-fn WcbFixed wcb_fixed_from_double(double d)
+fn WcbFixed double.to_fixed(self)
 {
-    return (WcbFixed)math::nearbyint(d * 256.0);
+    return (WcbFixed)math::nearbyint(self * 256.0);
 }
 
 <*

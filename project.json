@@ -6,8 +6,8 @@
     "test-sources": [
         "src/core/**",
         "test/**",
-        "build/client_protocol.c3",
-        "build/server_protocol.c3"
+//      "build/client_protocol.c3",
+//      "build/server_protocol.c3"
     ],
     "targets": {
         "wcb_scanner": {
@@ -33,3 +33,4 @@
         }
     }
 }
+// vim: ft=jsonc
