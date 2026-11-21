@@ -55,21 +55,21 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = 0)
 
         if (buf == {}) break;  // No more data to read
 
-        sz offset = 0;  // In words
+        sz word_offset = 0;  // In words
         bool short_message = true;  // If not enough data for message
 
-        while (offset < buf.len && msgs_dispatched < max_dispatch)
+        while (word_offset < buf.len && msgs_dispatched < max_dispatch)
         {
             short_message = true;
 
-            WcbWord[] data = buf[offset..];
+            WcbWord[] data = buf[word_offset..];
             WcbWord[2] header;
 
             if (data.len < header.len * WcbWord::size) break;
 
             mem::copy(&header, &data, header.len * WcbWord::size);
             data = data[header.len..];
-            offset += header.len;
+            word_offset += header.len;
 
             WcbHalfWord msg_len = (WcbHalfWord)(header[1] >> 16);
 
@@ -90,7 +90,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = 0)
             {
                 // Object does not exist, ignore and advance past message data.
                 // If the typeid is an interface, then also discard fds (zombie).
-                offset += arg_words;
+                word_offset += arg_words;
                 if (lookup.type == WcbInterface::typeid)
                 {
                     iface = lookup.as(WcbInterface*);

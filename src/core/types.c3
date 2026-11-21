@@ -99,7 +99,8 @@ interface WcbIOImpl
     fn void write(WcbWord[] data);
     // Write an fd to a buffer, but do not send it to the peer
     fn void write_fd(Fd fd);
-    // Flush all pending data and fds to the peer
+    // Flush all pending data and fds to the peer, should return true if data
+    // written, and false if would block.
     fn bool? flush();
 }
 
