@@ -1,0 +1,35 @@
+{
+    "authors": [ "Foxe Chen <chen.foxe@gmail.com>" ],
+    "output": "build",
+    "script-dir": ".",
+    "exec-dir": ".",
+    "test-sources": [
+        "src/core/**",
+        "test/**",
+        "build/client.c3",
+        "build/server.c3"
+    ],
+    "targets": {
+        "wcb_scanner": {
+            "type": "executable",
+            "sources": [ "src/scanner/**" ]
+        },
+        "protocol": {
+            "type": "prepare",
+            "depends-on": [ "wcb_scanner" ],
+            "exec": [
+                "build/wcb_scanner \"wcb::protocol\" client src/protocol/wayland.xml build/client.c3",
+                "build/wcb_scanner \"wcb::protocol\" server src/protocol/wayland.xml build/server.c3"
+            ]
+        },
+        "wcb": {
+            "type": "source-lib",
+            "depends-on": [ "protocol" ],
+            "sources": [
+                "src/core/**",
+                "build/client.c3",
+                "build/server.c3"
+            ]
+        }
+    }
+}
