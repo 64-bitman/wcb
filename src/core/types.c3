@@ -109,10 +109,10 @@ fn double WcbFixed.to_double(self)
     return (double)self / 256.0;
 }
 
-<* Initialize a fixed point from a double *>
-fn void WcbFixed.init_double(&self, double d)
+<* Get a fixed point from a double *>
+fn WcbFixed wcb_fixed_from_double(double d)
 {
-    *self = (WcbFixed)math::nearbyint(d * 256.0);
+    return (WcbFixed)math::nearbyint(d * 256.0);
 }
 
 <*

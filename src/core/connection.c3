@@ -287,6 +287,7 @@ macro WcbConnection.marshal_object(
     var $n_args = $vaarg.len / 2;
     sz words = 0;  // In words
 
+    // Find size of message arguments
     $for var $i = 0; $i < $n_args; $i++:
         $if $reflect($vaarg[$i]).type != WcbArgType:
             $error("Argument type is not WcbArgType!");
