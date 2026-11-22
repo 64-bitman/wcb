@@ -81,6 +81,8 @@ interface WcbObject
 
 interface WcbIOImpl
 {
+    fn void destroy() @optional;
+
     // Should return a buffer that must stay valid until read_finish() is
     // called. Return an empty slice if there is no data be read (shouldn't
     // block).
@@ -96,10 +98,12 @@ interface WcbIOImpl
     // Discard "n" file descriptors
     fn void discard_fds(sz n);
 
-    // Write "data" to a buffer, but do not send it to the peer
-    fn void write(WcbWord[] data);
-    // Write an fd to a buffer, but do not send it to the peer
-    fn void write_fd(Fd fd);
+    // Reserve space for "n" words before writing
+    fn void reserve(sz words) @optional;
+    // Send "data" or buffer it
+    fn void send(char[] data);
+    // Send an fd or buffer it
+    fn void send_fd(Fd fd);
     // Flush all pending data and fds to the peer, should return true if all
     // data written, and false if would block.
     fn bool? flush();

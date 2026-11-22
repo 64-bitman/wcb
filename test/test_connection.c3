@@ -4,6 +4,7 @@ import wcb::core::types;
 import wcb::core::wire @public;
 import wcb::core::connection @public;
 import std::collections::map;
+import std::collections::list;
 import libc;
 
 struct TestConnection (WcbConnectionImpl, WcbIOImpl)
@@ -12,6 +13,42 @@ struct TestConnection (WcbConnectionImpl, WcbIOImpl)
 
     HashMap{WcbId, any} objects;
     WcbId next_id;
+
+    WcbWord[] in;
+    Fd[] in_fds;
+
+    List{char} out;
+    List{Fd} out_fds;
+
+    List{Fd} closed_fds;
+}
+
+fn void TestConnection.init(&self, Allocator allocator)
+{
+    self.base.init(allocator, self);
+    self.base.set_io(self);
+
+    self.objects.init(allocator);
+    self.next_id = 0;
+
+    self.in = {};
+    self.in_fds = {};
+
+    self.out.init(allocator);
+    self.out_fds.init(allocator);
+
+    self.closed_fds.init(allocator);
+}
+
+fn void TestConnection.uninit(&self)
+{
+    self.base.uninit();
+    self.objects.free();
+
+    self.out.free();
+    self.out_fds.free();
+
+    self.closed_fds.free();
 }
 
 fn WcbId? TestConnection.insert(&self, WcbObject obj) @dynamic
@@ -55,11 +92,11 @@ fn void TestConnection.discard_fds(&self, sz n) @dynamic
 {
 }
 
-fn void TestConnection.write(&self, WcbWord[] data) @dynamic
+fn void TestConnection.send(&self, char[] data) @dynamic
 {
 }
 
-fn void TestConnection.write_fd(&self, Fd fd) @dynamic
+fn void TestConnection.send_fd(&self, Fd fd) @dynamic
 {
 }
 
@@ -72,6 +109,6 @@ fn void test_unmarshal() => @pool()
 {
     TestConnection ct;
 
-    ct.base.init(tmem);
-    ct.base.set_impl(&ct);
+    ct.init(tmem);
+    defer ct.uninit();
 }

@@ -2,7 +2,6 @@ module wcb::core::connection @private;
 
 import wcb::core::types;
 import wcb::core::wire @public;
-import std::collections::list;
 import libc;
 
 const sz MESSAGE_MAX_LEN = 4096;
@@ -10,6 +9,7 @@ const uint MESSAGE_MAX_ARGS = 20;
 
 interface WcbConnectionImpl
 {
+    fn void destroy() @optional;
     fn WcbId? insert(WcbObject obj);
     fn void remove(WcbId id);
     fn any? lookup(WcbId id);
@@ -26,23 +26,16 @@ struct WcbConnection
 
 <*
  @param [&inout] allocator : "Allocator to use"
+ @param [&inout] impl : "Implementation to use"
 *>
-fn void WcbConnection.init(&self, Allocator allocator)
+fn void WcbConnection.init(&self, Allocator allocator, WcbConnectionImpl impl)
 {
     self.allocator = allocator;
+    self.impl = impl;
 }
 
 fn void WcbConnection.uninit(&self)
-{
-}
-
-<*
- @param [&inout] impl : "Implementation to use"
-*>
-fn void WcbConnection.set_impl(&self, WcbConnectionImpl impl)
-{
-    self.impl = impl;
-}
+{}
 
 <*
  @param [&inout] io : "IO interface to use"
@@ -177,7 +170,8 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = 0)
 
                         if (is_array)
                         {
-                            arg.a = ((char*)&data)[0..len];
+                            arg.a.data.words = data;
+                            arg.a.len = len;
                             break;
                         }
 
@@ -271,6 +265,91 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = 0)
     }
 
     return msgs_dispatched;
+}
+
+macro send_word(WcbIOImpl io, WcbWord word) @local
+{
+    io.send(((char*)(&word))[..WcbWord::size]);
+}
+
+<*
+ @param obj_id : "Id of object the message is for"
+ @param opcode : "Opcode of message"
+ @param ... : "Argument types, then argument values"
+ @require ($vaarg.len % 2) != 0 : "Missing arguments"
+*>
+macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
+{
+    var $n_args = $vaarg.len / 2;
+    sz words = 0;
+
+    // Find size of message arguments
+    $for var $i = 0; $i < $n_args; $i++:
+        $if $reflect($vaarg[$i]).type != WcbArgType:
+            $error("Argument type is not WcbArgType!");
+        $endif
+
+        $switch ($vaarg[$i]):
+            $case WcbArgType.INT:
+            $case WcbArgType.UINT:
+            $case WcbArgType.FIXED:
+            $case WcbArgType.OBJECT:
+            $case WcbArgType.NEW_ID:
+                words += WcbWord::size;
+            $case WcbArgType.STRING:
+            $case WcbArgType.ARRAY:
+                words += WcbWord::size + mem::aligned_offset(
+                    $vaarg[$n_args + $i].len, WcbWord::size);
+            $case WcbArgType.FD:
+                words += 0;
+        $endswitch
+    $endfor
+
+    if (words > MAX_MESSAGE_LEN) return MESSAGE_TOO_BIG~;  // Message to large
+
+    self.io.reserve(words);
+
+    send_word(self.io, obj_id);
+    // Message length includes header
+    send_word(self.io, ((words * 4 + 8) << 16) | (opcode & 0xffff));
+
+    WcbWord slen;
+    sz min;
+
+    $for var $i = 0; $i < $n_args; $i++:
+        var $val = $vaarg[$n_args + $i];
+        $switch ($vaarg[$i]):
+            $case INT:
+            $case UINT:
+            $case FIXED:
+                send_word(self.io, $val);
+            $case OBJECT:
+            $case NEW_ID:
+                send_word(self.io, $val);
+            $case STRING:
+            $case ARRAY:
+                slen = $val.len;  // In bytes
+                min = (slen & ~3U);
+
+                send_word(self.io, slen);
+                $if ($vaarg[$i] == WcbArgType.ARRAY):
+                    self.io.send($val.data.bytes[..val.data.len]);
+                $else
+                    self.io.send($val);
+                $endif
+
+                // If length if not a multiple of word size, copy leftover
+                // bytes.
+                if (slen - min > 0)
+                {
+                    char[4] buf;
+
+                    self.io.send(buf[slen - min..]);
+                }
+            $case FD:
+                self.io.send_fd($vaarg[$n_args + $i]);
+        $endswitch
+    $endfor
 }
 
 <*

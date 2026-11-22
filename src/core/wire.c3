@@ -9,6 +9,16 @@ struct WcbNewId
     WcbInterface* iface;
 }
 
+struct WcbArray
+{
+    union data
+    {
+        WcbWord* words;
+        char* bytes;
+    }
+    uint len;  // In bytes
+}
+
 union WcbArg
 {
     int i;
@@ -17,7 +27,7 @@ union WcbArg
     String s;
     WcbObject o;
     WcbNewId n;
-    char[] a;
+    WcbArray a;
     Fd h;
 }
 
