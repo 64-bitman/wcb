@@ -274,6 +274,8 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = 0)
 }
 
 <*
+ @return "Return true if all pending messages were sent, otherwise false"
+ @return? WcbIOImpl.flush!
 *>
 fn bool? WcbConnection.flush(&self)
 {
