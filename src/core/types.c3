@@ -6,6 +6,7 @@ import libc;
 
 excuse
 {
+    INVALID_MESSAGE_LENGTH,
     MESSAGE_TOO_BIG,
     SHORT_MESSAGE,
     EXPECTED_FD,

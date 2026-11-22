@@ -24,16 +24,29 @@ struct WcbConnection
     WcbIOImpl io;
 }
 
+<*
+ @param [&inout] allocator : "Allocator to use"
+*>
 fn void WcbConnection.init(&self, Allocator allocator)
 {
     self.allocator = allocator;
 }
 
+fn void WcbConnection.uninit(&self)
+{
+}
+
+<*
+ @param [&inout] impl : "Implementation to use"
+*>
 fn void WcbConnection.set_impl(&self, WcbConnectionImpl impl)
 {
     self.impl = impl;
 }
 
+<*
+ @param [&inout] io : "IO interface to use"
+*>
 fn void WcbConnection.set_io(&self, WcbIOImpl io)
 {
     self.io = io;
@@ -56,6 +69,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = 0)
         if (buf == {}) break;  // No more data to read
 
         sz word_offset = 0;  // In words
+        sz words_consumed = 0;
         bool short_message = true;  // If not enough data for message
 
         while (word_offset < buf.len && msgs_dispatched < max_dispatch)
@@ -72,6 +86,12 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = 0)
             word_offset += header.len;
 
             WcbHalfWord msg_len = (WcbHalfWord)(header[1] >> 16);
+
+            // Message must be at least 8 bytes and a multiple of word size
+            if (msg_len < 8 || (msg_len & 3) != 0)
+            {
+                return types::INVALID_MESSAGE_LENGTH~;
+            }
 
             if (msg_len > data.len) break;  // Incomplete message
             if (msg_len > MESSAGE_MAX_LEN) return types::MESSAGE_TOO_BIG~;
@@ -118,6 +138,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = 0)
             sz arg_iface_idx = 0;
             sz remain = arg_words;
 
+            // Unmarshal message arguments
             foreach (arg_idx, WcbArgSignature sig : desc.signature)
             {
                 WcbArg* arg = &args[arg_idx];
@@ -242,10 +263,11 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = 0)
             }
 
             msgs_dispatched++;
+            words_consumed += (sz)msg_len >> 2;
             short_message = false;
         }
 
-        if (!short_message || msgs_dispatched < max_dispatch) break;
+        if (short_message || msgs_dispatched >= max_dispatch) break;
     }
 
     return msgs_dispatched;
@@ -255,5 +277,5 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = 0)
 *>
 fn bool? WcbConnection.flush(&self)
 {
-    return true;
+    return self.io.flush();
 }
