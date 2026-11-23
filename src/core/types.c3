@@ -12,7 +12,7 @@ excuse
     EXPECTED_FD,
     INVALID_STRING,
     NULL_OBJECT,
-    NULL_ARRAY,
+    NULL_STRING,
     OBJECT_NOT_EXISTS,
     INVALID_NEW_ID,
     BAD_OPCODE,
@@ -54,7 +54,8 @@ struct WcbMessageDesc
     // Signature of arguments
     WcbArgSignature[] signature;
 
-    // Interface of object/new_id arguments in "signature"
+    // Interfaces of object/new_id arguments in "signature". Other types are
+    // marked as null.
     WcbInterface*[] arg_interfaces;
 
     // Number of fd args in "signature"
@@ -81,32 +82,13 @@ interface WcbObject
 
 interface WcbIOImpl
 {
+    fn WcbWord*? read(sz n_words, bool peek = false, bool skip = false);
+    fn Fd? read_fd(sz n_discard = 0, Fd close = -1);
+
+    fn void write(char[] data, Fd fd = -1);
+    fn bool? flush() @optional;
+
     fn void destroy() @optional;
-
-    // Should return a buffer that must stay valid until read_finish() is
-    // called. Return an empty slice if there is no data be read (shouldn't
-    // block).
-    fn WcbWord[]? read();
-    // Called when done using the buffer returned by read(). Passed is the
-    // number of words consumed.
-    fn void read_finish(sz words_consumed);
-
-    // Return a file descriptor, should return -1 if none
-    fn Fd? read_fd();
-    // Close the file descriptor
-    fn void close_fd(Fd fd);
-    // Discard "n" file descriptors
-    fn void discard_fds(sz n);
-
-    // Reserve space for "n" words before writing
-    fn void reserve(sz words) @optional;
-    // Send "data" or buffer it
-    fn void send(char[] data);
-    // Send an fd or buffer it
-    fn void send_fd(Fd fd);
-    // Flush all pending data and fds to the peer, should return true if all
-    // data written, and false if would block.
-    fn bool? flush();
 }
 
 <* Convert a fixed point to a double *>

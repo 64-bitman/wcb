@@ -9,17 +9,15 @@ const uint MESSAGE_MAX_ARGS = 20;
 
 interface WcbConnectionImpl
 {
-    fn void destroy() @optional;
-    fn WcbId? insert(WcbObject obj);
-    fn void remove(WcbId id);
-    fn any? lookup(WcbId id);
-    fn bool? dispatch(WcbMessage* message);
+    fn WcbId? insert(WcbObject obj) @optional;
+    fn void remove(WcbId id) @optional;
+    fn any? lookup(WcbId id) @optional;
+    fn bool? handle(WcbMessage* message) @optional;
 }
 
 struct WcbConnection
 {
     Allocator allocator;
-
     WcbConnectionImpl impl;
     WcbIOImpl io;
 }
@@ -27,22 +25,26 @@ struct WcbConnection
 <*
  @param [&inout] allocator : "Allocator to use"
  @param [&inout] impl : "Implementation to use"
+ @param [&inout] io : "IO implementation to use"
 *>
-fn void WcbConnection.init(&self, Allocator allocator, WcbConnectionImpl impl)
+fn void WcbConnection.init(
+    &self,
+    WcbConnectionImpl impl,
+    WcbIOImpl io,
+    Allocator allocator)
 {
     self.allocator = allocator;
     self.impl = impl;
+    self.io = io;
 }
 
 fn void WcbConnection.uninit(&self)
-{}
-
-<*
- @param [&inout] io : "IO interface to use"
-*>
-fn void WcbConnection.set_io(&self, WcbIOImpl io)
 {
-    self.io = io;
+    if (&self.io.flush)
+    {
+        (void)self.io.flush();  // Flush any pending data before closing
+    }
+    if (&self.io.destroy) self.io.destroy();
 }
 
 <*
@@ -50,238 +52,206 @@ fn void WcbConnection.set_io(&self, WcbIOImpl io)
  @return "Number of messages dispatched, any fault is considered fatal"
  @return? WcbIOImpl.read!, WcbConnectionImpl.lookup!
 *>
-fn sz? WcbConnection.dispatch(&self, sz max_dispatch = 0)
+fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
 {
-    sz msgs_dispatched = 0;
+    sz dispatched = 0;
 
-    while (true)
+    while (dispatched < max_dispatch)
     {
-        WcbWord[] buf = self.io.read()!;
-        sz buf_words = buf.len * WcbWord::size;
+        WcbWord* header = self.io.read(2)!;
 
-        if (buf == {}) break;  // No more data to read
+        if (header == null) break;  // Incomplete header
 
-        sz word_offset = 0;  // In words
-        sz words_consumed = 0;
-        bool short_message = true;  // If not enough data for message
+        WcbHalfWord msg_len = (WcbHalfWord)(header[1] >> 16);
 
-        while (word_offset < buf.len && msgs_dispatched < max_dispatch)
+        // Message must be at least 8 bytes and a multiple of word size
+        if (msg_len < 8 || (msg_len & 3) != 0)
         {
-            short_message = true;
+            return types::INVALID_MESSAGE_LENGTH~;
+        }
 
-            WcbWord[] data = buf[word_offset..];
-            WcbWord[2] header;
+        if (msg_len > MESSAGE_MAX_LEN) return types::MESSAGE_TOO_BIG~;
 
-            if (data.len < header.len * WcbWord::size) break;
+        WcbHalfWord msg_words = msg_len >> 2;
+        WcbHalfWord arg_words = msg_words - 2;
 
-            mem::copy(&header, &data, header.len * WcbWord::size);
-            data = data[header.len..];
-            word_offset += header.len;
+        if (self.io.read(arg_words, peek: true)! == null)
+        {
+            // Incomplete message
+            break;
+        }
 
-            WcbHalfWord msg_len = (WcbHalfWord)(header[1] >> 16);
+        WcbId obj_id = header[0];
+        WcbHalfWord opcode = (WcbHalfWord)(header[1] & 0x0000ffff);
 
-            // Message must be at least 8 bytes and a multiple of word size
-            if (msg_len < 8 || (msg_len & 3) != 0)
+        WcbConnectionImpl impl = self.impl;
+        WcbObject obj;
+        WcbInterface* iface;
+        WcbMessageDesc* desc;
+        any lookup;
+
+        defer try dispatched++;
+
+        // Consider any fault a protocol error
+        lookup = impl.lookup(obj_id)!;
+        if (lookup.type != WcbObject::typeid)
+        {
+            // If null, then object does not exist. Otherwise if an interface,
+            // then the object is a zombie. In both cases ignore the message and
+            // consume any fd args (if possible).
+            self.io.read(arg_words, skip: true)!;
+            if (lookup.type == WcbInterface::typeid)
             {
-                return types::INVALID_MESSAGE_LENGTH~;
+                iface = lookup.as(WcbInterface*);
+                desc = iface.get_message(opcode)!;
+                self.io.read_fd(n_discard: desc.n_fd_args)!;
+            }
+            continue;
+        }
+
+        obj = lookup.as(WcbObject);
+        iface = obj.get_interface();
+        desc = iface.get_message(opcode)!;
+
+        if (desc.signature.len > MESSAGE_MAX_ARGS)
+        {
+            unreachable("Message has too many arguments!");
+        }
+
+        WcbArg[MESSAGE_MAX_ARGS] args;
+
+        // Unmarshal message arguments
+        foreach (arg_idx, WcbArgSignature sig : desc.signature)
+        {
+            WcbArg* arg = &args[arg_idx];
+            WcbWord first_word;
+
+            // Fd args do not take up any space
+            if (sig.type != FD)
+            {
+                WcbWord* wp = self.io.read(1)!;
+
+                if (wp == null) return types::SHORT_MESSAGE~;
+                first_word = *wp;
             }
 
-            if (msg_len > data.len) break;  // Incomplete message
-            if (msg_len > MESSAGE_MAX_LEN) return types::MESSAGE_TOO_BIG~;
-
-            sz arg_words = ((sz)msg_len - 8) >> 2;
-            WcbId obj_id = header[0];
-            WcbHalfWord opcode = (WcbHalfWord)(header[1] & 0x0000ffff);
-            WcbObject obj;
-            WcbInterface* iface;
-            WcbMessageDesc* desc;
-            any lookup;
-
-            // Consider any fault a protocol error.
-            lookup = self.impl.lookup(obj_id)!;
-            if (lookup.type != WcbObject::typeid)
+            switch (sig.type)
             {
-                // Object does not exist, ignore and advance past message data.
-                // If the typeid is an interface, then also discard fds (zombie).
-                word_offset += arg_words;
-                if (lookup.type == WcbInterface::typeid)
-                {
-                    iface = lookup.as(WcbInterface*);
-                    desc = iface.get_message(opcode)!;
-                    self.io.discard_fds(desc.n_fd_args);
-                }
-                else
-                {
-                    assert(lookup == null);
-                }
-                continue;
-            }
+                case INT:
+                    arg.i = (int)first_word;
+                case UINT:
+                    arg.u = (uint)first_word;
+                case FIXED:
+                    arg.f = (WcbFixed)first_word;
+                case STRING:
+                case ARRAY:
+                    bool is_array = sig.type == ARRAY;
+                    WcbWord len = first_word;
 
-            obj = lookup.as(WcbObject);
-            iface = obj.get_interface();
-            desc = iface.get_message(opcode)!;
+                    if (len == 0)
+                    {
+                        if (sig.nullable) break;
+                        if (!is_array) return types::NULL_STRING~;
+                        break;
+                    }
 
-            WcbArg[MESSAGE_MAX_ARGS] args;
+                    sz word_len = mem::aligned_offset(len, WcbWord::size) << 2;
 
-            if (desc.signature.len > MESSAGE_MAX_ARGS)
-            {
-                unreachable("Message has too many arguments!");
-            }
+                    // Validate string/array length
+                    WcbWord* data = self.io.read(word_len)!;
 
-            sz arg_iface_idx = 0;
-            sz remain = arg_words;
+                    if (data == null) return types::SHORT_MESSAGE~;
 
-            // Unmarshal message arguments
-            foreach (arg_idx, WcbArgSignature sig : desc.signature)
-            {
-                WcbArg* arg = &args[arg_idx];
+                    if (is_array)
+                    {
+                        arg.a.data.words = data;
+                        arg.a.len = len;
+                        break;
+                    }
 
-                switch (sig.type)
-                {
-                    case INT:
-                        arg.i = (int)data[0];
-                        nextcase FIXED;
-                    case UINT:
-                        arg.u = (uint)data[0];
-                        nextcase FIXED;
-                    case FIXED:
-                        if (sig.type == FIXED) arg.f = (WcbFixed)data[0];
-                        data = data[1..];
-                        remain--;
-                    case STRING:
-                    case ARRAY:
-                        bool is_array = sig.type == WcbArgType.ARRAY;
-                        WcbWord len = data[0];
-                        sz word_len;
+                    // String must be NUL terminated, but not have any interior
+                    // NUL bytes.
+                    char* str = (char*)data;
 
-                        data = data[1..];
+                    if (str[len - 1] != '\0') return types::INVALID_STRING~;
 
-                        if (len == 0)
+                    for (WcbWord i = 0; i < len - 1; i++)
+                    {
+                        if (str[i] == '\0') return types::INVALID_STRING~;
+                    }
+
+                    arg.s = (String)(str[..len]);
+                case OBJECT:
+                    WcbId arg_id = first_word;
+
+                    if (arg_id == 0)
+                    {
+                        if (!sig.nullable) return types::NULL_OBJECT~;
+
+                        arg.o = null;
+                        break;
+                    }
+
+                    any arg_lookup = impl.lookup(arg_id)!;
+
+                    if (arg_lookup.type != WcbObject::typeid)
+                    {
+                        if (arg_lookup.type == WcbInterface::typeid)
                         {
-                            if (sig.nullable) break;
-                            if (!is_array) return types::NULL_ARRAY~;
-                            break;
-                        }
-
-                        word_len = mem::aligned_offset(len, WcbWord::size) << 2;
-
-                        // Validate string/array length
-                        if (word_len > remain) return types::SHORT_MESSAGE~;
-
-                        if (is_array)
-                        {
-                            arg.a.data.words = data;
-                            arg.a.len = len;
-                            break;
-                        }
-
-                        // String must be NUL terminated, but not have any
-                        // interior NUL bytes.
-                        char[] str = ((char*)&data)[0..len];
-
-                        if (str[len - 1] != '\0') return types::INVALID_STRING~;
-
-                        for (WcbWord i = 0; i < len - 1; i++)
-                        {
-                            if (str[i] == '\0') return types::INVALID_STRING~;
-                        }
-
-                        arg.s = (String)str;
-                    case OBJECT:
-                        WcbId arg_id = data[0];
-
-                        data = data[1..];
-                        remain--;
-
-                        if (arg_id == 0)
-                        {
-                            if (!sig.nullable) return types::NULL_OBJECT~;
+                            // Object is a zombie, just set arg to null
                             arg.o = null;
                             break;
                         }
+                        return types::OBJECT_NOT_EXISTS~;
+                    }
 
-                        any arg_lookup = self.impl.lookup(arg_id)!;
+                    arg.o = arg_lookup.as(WcbObject);
+                case NEW_ID:
+                    WcbId new_id = first_word;
 
-                        if (arg_lookup.type != WcbObject::typeid)
-                        {
-                            if (arg_lookup.type == WcbInterface::typeid)
-                            {
-                                // Object is a zombie, just set arg to null
-                                arg.o = null;
-                                break;
-                            }
-                            return types::OBJECT_NOT_EXISTS~;
-                        }
+                    // new_id type cannot be null
+                    if (new_id == 0) return types::NULL_OBJECT~;
 
-                        arg.o = arg_lookup.as(WcbObject);
-                    case NEW_ID:
-                        WcbId new_id = data[0];
+                    // Check if object with id already exists
+                    any new_lookup = impl.lookup(new_id)!;
 
-                        data = data[1..];
-                        remain--;
+                    if (new_lookup != null) return types::INVALID_NEW_ID~;
 
-                        // new_id type cannot be null
-                        if (new_id == 0) return types::NULL_OBJECT~;
-
-                        // Check if object already exists
-                        any new_lookup = self.impl.lookup(new_id)!;
-
-                        if (new_lookup != null) return types::INVALID_NEW_ID~;
-
-                        arg.n.id = new_id;
-                        arg.n.iface = desc.arg_interfaces[arg_iface_idx++];
-                    case FD:
-                        // File descriptors don't take up any space
-                        arg.h = self.io.read_fd()!;
-                        if (arg.h == -1) return types::EXPECTED_FD~;
-                    default:
-                        unreachable("Unknown arg type %d!", sig.type);
-                }
+                    arg.n.id = new_id;
+                    arg.n.iface = desc.arg_interfaces[arg_idx];
+                case FD:
+                    arg.h = self.io.read_fd()!;
+                    if (arg.h == -1) return types::EXPECTED_FD~;
+                default:
+                    unreachable("Unknown arg type %d!", sig.type);
             }
-
-            WcbMessage msg = {
-                .obj = obj,
-                .opcode = opcode,
-                .args = args[..],
-            };
-
-            if (!self.impl.dispatch(&msg)! && desc.n_fd_args > 0)
-            {
-                // Message was not handled, close any fd args
-                foreach (arg_idx, WcbArgSignature sig : desc.signature)
-                {
-                    if (sig.type != WcbArgType.FD) continue;
-
-                    self.io.close_fd(args[arg_idx].h);
-                }
-            }
-
-            msgs_dispatched++;
-            words_consumed += (sz)msg_len >> 2;
-            short_message = false;
         }
 
-        if (short_message || msgs_dispatched >= max_dispatch) break;
+        WcbMessage msg = {
+            .obj = obj,
+            .opcode = opcode,
+            .args = args[..]
+        };
     }
 
-    return msgs_dispatched;
+    return dispatched;
 }
 
-macro send_word(WcbIOImpl io, WcbWord word) @local
+macro write_word(WcbIOImpl io, WcbWord word) @local
 {
-    io.send(((char*)(&word))[..WcbWord::size]);
+    io.write(((char*)(&word))[..WcbWord::size - 1]);
 }
 
 <*
  @param obj_id : "Id of object the message is for"
  @param opcode : "Opcode of message"
  @param ... : "Argument types, then argument values"
- @require ($vaarg.len % 2) != 0 : "Missing arguments"
+ @return? types::MESSAGE_TOO_BIG
 *>
 macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
 {
     var $n_args = $vaarg.len / 2;
-    sz words = 0;
+    sz msg_words = 2;  // Message length includes header
 
     // Find size of message arguments
     $for var $i = 0; $i < $n_args; $i++:
@@ -295,23 +265,22 @@ macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
             $case WcbArgType.FIXED:
             $case WcbArgType.OBJECT:
             $case WcbArgType.NEW_ID:
-                words += WcbWord::size;
+                msg_words++;
             $case WcbArgType.STRING:
             $case WcbArgType.ARRAY:
-                words += WcbWord::size + mem::aligned_offset(
-                    $vaarg[$n_args + $i].len, WcbWord::size);
+                msg_words += 1 + (mem::aligned_offset(
+                        $vaarg[$n_args + $i].len, WcbWord::size) >> 2);
             $case WcbArgType.FD:
-                words += 0;
+                msg_words += 0;
         $endswitch
     $endfor
 
-    if (words > MAX_MESSAGE_LEN) return MESSAGE_TOO_BIG~;  // Message to large
+    if (msg_words > MESSAGE_MAX_LEN >> 2) return types::MESSAGE_TOO_BIG~;
 
-    self.io.reserve(words);
+    WcbHalfWord msg_len = (WcbHalfWord)msg_words * 4;
 
-    send_word(self.io, obj_id);
-    // Message length includes header
-    send_word(self.io, ((words * 4 + 8) << 16) | (opcode & 0xffff));
+    write_word(self.io, obj_id);
+    write_word(self.io, (msg_len << 16) | (opcode & 0xffff));
 
     WcbWord slen;
     sz min;
@@ -322,20 +291,26 @@ macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
             $case INT:
             $case UINT:
             $case FIXED:
-                send_word(self.io, $val);
+                write_word(self.io, $val);
             $case OBJECT:
             $case NEW_ID:
-                send_word(self.io, $val);
+                write_word(self.io, $val);
             $case STRING:
             $case ARRAY:
-                slen = $val.len;  // In bytes
+                $if $vaarg[$i] == STRING:
+                    slen = $val.len;  // In bytes
+                $else
+                    slen = $val.data.len;  // In bytes
+                $endif
+
                 min = (slen & ~3U);
 
-                send_word(self.io, slen);
-                $if ($vaarg[$i] == WcbArgType.ARRAY):
-                    self.io.send($val.data.bytes[..val.data.len]);
+                write_word(self.io, slen);
+
+                $if $vaarg[$i] == STRING:
+                    self.io.write($val);
                 $else
-                    self.io.send($val);
+                    self.io.write($val.data.bytes);
                 $endif
 
                 // If length if not a multiple of word size, copy leftover
@@ -344,10 +319,10 @@ macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
                 {
                     char[4] buf;
 
-                    self.io.send(buf[slen - min..]);
+                    self.io.write(buf[slen - min..]);
                 }
             $case FD:
-                self.io.send_fd($vaarg[$n_args + $i]);
+                self.io.write({}, fd: $vaarg[$n_args + $i]);
         $endswitch
     $endfor
 }
