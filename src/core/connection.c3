@@ -159,7 +159,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
                         break;
                     }
 
-                    sz word_len = mem::aligned_offset(len, WcbWord::size) << 2;
+                    sz word_len = mem::aligned_offset(len, WcbWord::size) >> 2;
 
                     // Validate string/array length
                     WcbWord* data = self.io.read(word_len)!;
@@ -184,7 +184,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
                         if (str[i] == '\0') return types::INVALID_STRING~;
                     }
 
-                    arg.s = (String)(str[:len]);
+                    arg.s = (String)(str[:len - 1]); // Don't include NUL
                 case OBJECT:
                     WcbId arg_id = first_word;
 
@@ -314,10 +314,12 @@ macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
                 slen = $vaarg[$n_args + $i].len;  // In bytes
                 min = (slen & ~3U);
 
+                if ($vaarg[$i] == STRING) slen++; // Length includes NUL
                 write_word(self.io, slen);
 
                 $if $vaarg[$i] == STRING:
                     self.io.write($vaarg[$n_args + $i]);
+                    self.io.write(((char*)&&'\0')[:1]); // Add NUL byte
                 $else
                     self.io.write($vaarg[$n_args + $i].data.bytes[:slen]);
                 $endif

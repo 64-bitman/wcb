@@ -125,21 +125,46 @@ WcbInterface iface1 = {
             },
             .n_fd_args = 1,
             .arg_interfaces = { null, null, &iface1, &iface1 }
+        },
+        {
+            .name = "pong",
+            .since = 1,
+            .signature = {
+                { .type = STRING, .nullable = false },
+                { .type = STRING, .nullable = false },
+                { .type = STRING, .nullable = true },
+                { .type = ARRAY, .nullable = false }
+            },
+            .n_fd_args = 0,
+            .arg_interfaces = { null, null, null }
         }
     }
 };
 
 fn bool? TestConnection.handle(&self, WcbMessage* msg) @dynamic
 {
-    test::eq(msg.obj.get_interface(), &iface1);
-    test::eq(msg.opcode, 0);
-    test::eq(msg.args.len, 4);
+    if (msg.opcode == 0)
+    {
+        test::eq(msg.obj.get_interface(), &iface1);
+        test::eq(msg.args.len, 4);
 
-    test::eq(msg.args[0].i, 1);
-    test::eq(msg.args[1].h, 12);
-    test::eq(msg.args[2].n.iface, &iface1);
-    test::eq(msg.args[2].n.id, (WcbId)3);
-    test::eq(msg.args[3].o.get_interface(), &iface1);
+        test::eq(msg.args[0].i, 1);
+        test::eq(msg.args[1].h, 12);
+        test::eq(msg.args[2].n.iface, &iface1);
+        test::eq(msg.args[2].n.id, (WcbId)3);
+        test::eq(msg.args[3].o.get_interface(), &iface1);
+    }
+    else if (msg.opcode == 1)
+    {
+        test::eq(msg.obj.get_interface(), &iface1);
+        test::eq(msg.args.len, 4);
+
+        test::eq(msg.args[0].s, "hello");
+        test::eq(msg.args[1].s, "multipl");
+        test::eq(msg.args[2].s, (String){});
+        test::eq(msg.args[3].a.data.bytes[:msg.args[3].a.len], "array");
+        test::eq(msg.args[3].a.len, 5U);
+    }
 
     return false;  // Fd arg should be closed
 }
@@ -196,11 +221,17 @@ fn void test_basic() => @pool()
         .len = 5
     };
 
-    // Check if sending string and arrays work correctly at compile time
-    ct.send(obj.id, 0,
+    // Check if sending string and arrays work correctly
+    ct.send(obj.id, 1,
+        WcbArgType.STRING,
+        WcbArgType.STRING,
         WcbArgType.STRING,
         WcbArgType.ARRAY,
         "hello",
+        "multipl", // Multiple of word size (including NUL byte!)
+        {},
         &arr
     )!!;
+
+    test::eq(ct.dispatch()!!, 1);
 }
