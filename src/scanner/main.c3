@@ -96,27 +96,28 @@ fn int main(String[] cmdargs)
     {
         WaylandProtocol*? protocol = parser::generate_tree(
             path::new(tmem, in_file)!!,
-        gen_type == "client"
         );
 
         if (catch err = protocol)
         {
-            io::eprintfn("Error generating code: %s", err.short_name());
+            io::eprintfn("Error parsing xml: %s", err.short_name());
             return 1;
         }
 
-        if (catch validate::validate_tree(protocol))
+        if (catch err = validate::validate_tree(protocol))
         {
+            io::eprintfn("Error validating protocol: %s", err.short_name());
             return 1;
         }
 
-        if (catch codegen::generate_code(
+        if (catch err = codegen::generate_code(
                 protocol,
                 modname,
                 path::new(tmem, out_file)!!,
-            gen_type == "client"
+                gen_type == "client"
         ))
         {
+            io::eprintfn("Error generating code: %s", err.short_name());
             return 1;
         }
     };

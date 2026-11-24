@@ -41,8 +41,6 @@ struct WaylandInterface
     WaylandMessage[] events;
     WaylandMessage[] requests;
     WaylandEnum[] enums;
-
-    bool client;
 }
 
 // "request"/"event" element
@@ -285,7 +283,7 @@ fn void? WaylandEntry.init(&self, XmlNode* node)
 }
 
 // Parse the XML tree to in memory representation
-fn WaylandProtocol*? generate_tree(Path file, bool client)
+fn WaylandProtocol*? generate_tree(Path file)
 {
     File? fp = file::open_path(file, "r")!;
 
@@ -330,7 +328,6 @@ fn WaylandProtocol*? generate_tree(Path file, bool client)
     foreach (idx, iface_node : interface_list)
     {
         protocol.interfaces[idx].init(iface_node)!;
-        protocol.interfaces[idx].client = client;
     }
 
     return protocol;
