@@ -305,10 +305,10 @@ macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
             $case INT:
             $case UINT:
             $case FIXED:
-                write_word(self.io, $vaarg[$n_args + $i]);
+                write_word(self.io, (WcbWord)$vaarg[$n_args + $i]);
             $case OBJECT:
             $case NEW_ID:
-                write_word(self.io, $vaarg[$n_args + $i]);
+                write_word(self.io, (WcbWord)$vaarg[$n_args + $i]);
             $case STRING:
             $case ARRAY:
                 slen = $vaarg[$n_args + $i].len;  // In bytes
@@ -331,7 +331,7 @@ macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
                     self.io.write(buf[(slen - min)..]);
                 }
             $case FD:
-                self.io.write({}, fd: $vaarg[$n_args + $i]);
+                self.io.write({}, fd: (Fd)$vaarg[$n_args + $i]);
         $endswitch
     $endfor
 }
