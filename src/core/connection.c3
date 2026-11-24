@@ -1,4 +1,4 @@
-module wcb::core::connection @private;
+module wcb::core::connection <ObjectType> @private;
 
 import wcb::core::types;
 import wcb::core::wire @public;
@@ -9,9 +9,10 @@ const uint MESSAGE_MAX_ARGS = 20;
 
 interface WcbConnectionImpl
 {
-    fn WcbId? insert(WcbObject obj) @optional;
-    fn void remove(WcbId id) @optional;
+    // Return object with given id, or null if object does not exist.
     fn any? lookup(WcbId id) @optional;
+
+    // Handle the message
     fn bool? handle(WcbMessage* message) @optional;
 }
 
@@ -85,7 +86,8 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
         WcbHalfWord opcode = (WcbHalfWord)(header[1] & 0x0000ffff);
 
         WcbConnectionImpl impl = self.impl;
-        WcbObject obj;
+        ObjectType* obj;
+        WcbObject obj_impl;
         WcbInterface* iface;
         WcbMessageDesc* desc;
         any lookup;
@@ -94,7 +96,8 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
 
         // Consider any fault a protocol error
         lookup = impl.lookup(obj_id)!;
-        if (lookup.type != WcbObject::typeid)
+
+        if (lookup.type != ObjectType::typeid)
         {
             // If null, then object does not exist. Otherwise if an interface,
             // then the object is a zombie. In both cases ignore the message and
@@ -109,8 +112,9 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
             continue;
         }
 
-        obj = lookup.as(WcbObject);
-        iface = obj.get_interface();
+        obj = (ObjectType*)lookup;
+        obj_impl = obj;
+        iface = obj_impl.get_interface();
         desc = iface.get_message(opcode)!;
 
         if (desc.signature.len > MESSAGE_MAX_ARGS)
@@ -180,7 +184,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
                         if (str[i] == '\0') return types::INVALID_STRING~;
                     }
 
-                    arg.s = (String)(str[..len]);
+                    arg.s = (String)(str[:len]);
                 case OBJECT:
                     WcbId arg_id = first_word;
 
@@ -194,7 +198,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
 
                     any arg_lookup = impl.lookup(arg_id)!;
 
-                    if (arg_lookup.type != WcbObject::typeid)
+                    if (arg_lookup.type != ObjectType::typeid)
                     {
                         if (arg_lookup.type == WcbInterface::typeid)
                         {
@@ -205,7 +209,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
                         return types::OBJECT_NOT_EXISTS~;
                     }
 
-                    arg.o = arg_lookup.as(WcbObject);
+                    arg.o = (WcbObject)anycast(arg_lookup, ObjectType)!!;
                 case NEW_ID:
                     WcbId new_id = first_word;
 
@@ -228,10 +232,21 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
         }
 
         WcbMessage msg = {
-            .obj = obj,
+            .obj = obj_impl,
             .opcode = opcode,
-            .args = args[..]
+            .args = args[:desc.signature.len]
         };
+
+        if (!impl.handle(&msg)!)
+        {
+            // Message was not handled, close any fd args
+            foreach (arg_idx, WcbArgSignature sig : desc.signature)
+            {
+                if (sig.type != FD) continue;
+
+                self.io.read_fd(close: args[arg_idx].h)!;
+            }
+        }
     }
 
     return dispatched;
@@ -239,7 +254,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
 
 macro write_word(WcbIOImpl io, WcbWord word) @local
 {
-    io.write(((char*)(&word))[..WcbWord::size - 1]);
+    io.write(((char*)(&word))[:WcbWord::size]);
 }
 
 <*
@@ -286,31 +301,25 @@ macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
     sz min;
 
     $for var $i = 0; $i < $n_args; $i++:
-        var $val = $vaarg[$n_args + $i];
         $switch ($vaarg[$i]):
             $case INT:
             $case UINT:
             $case FIXED:
-                write_word(self.io, $val);
+                write_word(self.io, $vaarg[$n_args + $i]);
             $case OBJECT:
             $case NEW_ID:
-                write_word(self.io, $val);
+                write_word(self.io, $vaarg[$n_args + $i]);
             $case STRING:
             $case ARRAY:
-                $if $vaarg[$i] == STRING:
-                    slen = $val.len;  // In bytes
-                $else
-                    slen = $val.data.len;  // In bytes
-                $endif
-
+                slen = $vaarg[$n_args + $i].len;  // In bytes
                 min = (slen & ~3U);
 
                 write_word(self.io, slen);
 
                 $if $vaarg[$i] == STRING:
-                    self.io.write($val);
+                    self.io.write($vaarg[$n_args + $i]);
                 $else
-                    self.io.write($val.data.bytes);
+                    self.io.write($vaarg[$n_args + $i].data.bytes[:slen]);
                 $endif
 
                 // If length if not a multiple of word size, copy leftover
@@ -319,7 +328,7 @@ macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
                 {
                     char[4] buf;
 
-                    self.io.write(buf[slen - min..]);
+                    self.io.write(buf[(slen - min)..]);
                 }
             $case FD:
                 self.io.write({}, fd: $vaarg[$n_args + $i]);
