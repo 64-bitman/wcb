@@ -16,6 +16,8 @@ excuse
     OBJECT_NOT_EXISTS,
     INVALID_NEW_ID,
     BAD_OPCODE,
+    BAD_OBJECT_ID,
+    OBJECT_LIMIT_REACHED
 }
 
 // Wire types

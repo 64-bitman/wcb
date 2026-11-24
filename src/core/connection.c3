@@ -9,7 +9,8 @@ const uint MESSAGE_MAX_ARGS = 20;
 
 interface WcbConnectionImpl
 {
-    // Return object with given id, or null if object does not exist.
+    // Return object with given id, or null if object does not exist. This
+    // should also validate the "id" every time (and fault if invalid).
     fn any? lookup(WcbId id) @optional;
 
     // Handle the message

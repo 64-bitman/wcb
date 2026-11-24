@@ -8,7 +8,7 @@ import std::collections::list;
 import std::io;
 import libc;
 
-struct TestObject (WcbObject)
+struct TestObject (WcbObject) @local
 {
     WcbId id;
     WcbInterface* iface;
@@ -24,7 +24,7 @@ fn WcbInterface* TestObject.get_interface(&self) @dynamic
     return self.iface;
 }
 
-struct TestConnection (WcbConnectionImpl{TestObject}, WcbIOImpl)
+struct TestConnection (WcbConnectionImpl{TestObject}, WcbIOImpl) @local
 {
     inline WcbConnection{TestObject} base;
 
