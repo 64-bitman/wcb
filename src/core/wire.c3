@@ -15,34 +15,6 @@ enum WcbEntity : char (uint base_id, WcbMessageType incoming_type)
     SERVER {0xff000000, REQUEST}
 }
 
-struct WcbNewId
-{
-    WcbId id;
-    WcbInterface* iface;
-}
-
-struct WcbArray
-{
-    union data
-    {
-        WcbWord* words;
-        char* bytes;
-    }
-    uint len;  // In bytes
-}
-
-union WcbArg
-{
-    int i;
-    uint u;
-    WcbFixed f;
-    String s;
-    WcbObject o;
-    WcbNewId n;
-    WcbArray a;
-    Fd h;
-}
-
 struct WcbMessage
 {
     WcbObject obj;

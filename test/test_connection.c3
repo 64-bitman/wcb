@@ -14,7 +14,7 @@ struct TestObject (WcbObject) @local
     WcbInterface* iface;
 }
 
-fn bool? TestObject.dispatch(&self, WcbHalfWord opcode, args...) @dynamic
+fn bool? TestObject.dispatch(&self, WcbHalfWord opcode, WcbArg[] args) @dynamic
 {
     return true;
 }
@@ -146,23 +146,21 @@ fn bool? TestConnection.handle(&self, WcbMessage* msg) @dynamic
     if (msg.opcode == 0)
     {
         test::eq(msg.obj.get_interface(), &iface1);
-        test::eq(msg.args.len, 4);
 
         test::eq(msg.args[0].i, 1);
         test::eq(msg.args[1].h, 12);
-        test::eq(msg.args[2].n.iface, &iface1);
         test::eq(msg.args[2].n.id, (WcbId)3);
+        test::eq(msg.args[2].n.parent, msg.obj);
         test::eq(msg.args[3].o.get_interface(), &iface1);
     }
     else if (msg.opcode == 1)
     {
         test::eq(msg.obj.get_interface(), &iface1);
-        test::eq(msg.args.len, 4);
 
         test::eq(msg.args[0].s, "hello");
         test::eq(msg.args[1].s, "multipl");
         test::eq(msg.args[2].s, (String){});
-        test::eq(msg.args[3].a.data.bytes[:msg.args[3].a.len], "array");
+        test::eq(msg.args[3].a, "array");
         test::eq(msg.args[3].a.len, 5U);
     }
 
@@ -216,11 +214,6 @@ fn void test_basic() => @pool()
     test::eq(ct.dispatch()!!, 1);
     test::eq(test.closed_fds.get(0), 12);
 
-    WcbArray arr = {
-        .data.bytes = "array",
-        .len = 5
-    };
-
     // Check if sending string and arrays work correctly
     ct.send(obj.id, 1,
         WcbArgType.STRING,
@@ -230,7 +223,7 @@ fn void test_basic() => @pool()
         "hello",
         "multipl", // Multiple of word size (including NUL byte!)
         {},
-        &arr
+        "array"
     )!!;
 
     test::eq(ct.dispatch()!!, 1);

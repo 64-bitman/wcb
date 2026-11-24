@@ -45,6 +45,24 @@ bitstruct WcbArgSignature : char
     bool nullable: 4;
 }
 
+struct WcbNewId
+{
+    WcbId id;
+    WcbObject parent;
+}
+
+union WcbArg
+{
+    int i;
+    uint u;
+    WcbFixed f;
+    String s;
+    WcbObject o;
+    WcbNewId n;
+    char[] a;
+    Fd h;
+}
+
 struct WcbMessageDesc
 {
     // Name of message
@@ -78,7 +96,7 @@ struct WcbInterface
 
 interface WcbObject
 {
-    fn bool? dispatch(WcbHalfWord opcode, args...);
+    fn bool? dispatch(WcbHalfWord opcode, WcbArg[] args);
     fn WcbInterface* get_interface();
 }
 

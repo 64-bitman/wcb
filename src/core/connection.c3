@@ -169,8 +169,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
 
                     if (is_array)
                     {
-                        arg.a.data.words = data;
-                        arg.a.len = len;
+                        arg.a = ((char *)data)[:len];
                         break;
                     }
 
@@ -223,7 +222,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
                     if (new_lookup != null) return types::INVALID_NEW_ID~;
 
                     arg.n.id = new_id;
-                    arg.n.iface = desc.arg_interfaces[arg_idx];
+                    arg.n.parent = obj_impl;
                 case FD:
                     arg.h = self.io.read_fd()!;
                     if (arg.h == -1) return types::EXPECTED_FD~;
@@ -318,11 +317,9 @@ macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
                 if ($vaarg[$i] == STRING) slen++; // Length includes NUL
                 write_word(self.io, slen);
 
+                self.io.write($vaarg[$n_args + $i]);
                 $if $vaarg[$i] == STRING:
-                    self.io.write($vaarg[$n_args + $i]);
                     self.io.write(((char*)&&'\0')[:1]); // Add NUL byte
-                $else
-                    self.io.write($vaarg[$n_args + $i].data.bytes[:slen]);
                 $endif
 
                 // If length if not a multiple of word size, copy leftover
