@@ -20,8 +20,6 @@ excuse
     OBJECT_LIMIT_REACHED
 }
 
-const sz MESSAGE_MAX_LEN = 4096;
-
 // Wire types
 alias WcbWord = uint;
 alias WcbHalfWord = ushort;
@@ -108,8 +106,9 @@ interface WcbIOImpl
     fn Fd? read_fd(sz n_discard = 0, Fd close = -1);
 
     fn void write(char[] data, Fd fd = -1);
-    fn bool? flush(bool write) @optional;
+    fn bool? flush() @optional;
 
+    fn Fd? dup_fd(Fd fd);
     fn void destroy() @optional;
 }
 

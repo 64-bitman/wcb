@@ -165,6 +165,11 @@ fn void TestConnection.write(&self, char[] data, Fd fd = -1) @dynamic
     (void)self.buf.write(data)!!;
 }
 
+fn Fd? TestConnection.dup_fd(&self, Fd fd) @dynamic @unused
+{
+    return fd;
+}
+
 fn void test_basic() => @pool()
 {
     TestConnection test;

@@ -4,7 +4,9 @@ import wcb::core::types;
 import wcb::core::wire @public;
 import libc;
 
+const sz MESSAGE_MAX_LEN = 4096;
 const uint MESSAGE_MAX_ARGS = 20;
+const uint MESSAGE_MAX_FDS = 28; // Taken from libwayalnd
 
 interface WcbConnectionImpl
 {
@@ -22,7 +24,7 @@ struct WcbConnection
     WcbConnectionImpl impl;
     WcbIOImpl io;
 
-    WcbWord[types::MESSAGE_MAX_LEN * 2] buf;
+    WcbWord[MESSAGE_MAX_LEN * 2] buf;
     sz buf_woff; // In words
     sz buf_len; // In bytes
 }
@@ -51,8 +53,7 @@ fn void WcbConnection.uninit(&self)
     if (&self.io.flush)
     {
         // Flush any pending data before closing
-        (void)self.io.flush(true);
-        (void)self.io.flush(false);
+        (void)self.io.flush();
     }
     if (&self.io.destroy) self.io.destroy();
 }
@@ -113,7 +114,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
             return types::INVALID_MESSAGE_LENGTH~;
         }
 
-        if (msg_len > types::MESSAGE_MAX_LEN) return types::MESSAGE_TOO_BIG~;
+        if (msg_len > MESSAGE_MAX_LEN) return types::MESSAGE_TOO_BIG~;
 
         WcbHalfWord msg_words = msg_len >> 2;
         WcbHalfWord arg_words = msg_words - 2;
@@ -150,7 +151,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
             {
                 iface = lookup.as(WcbInterface*);
                 desc = iface.get_message(opcode)!;
-                self.io.read_fd(n_discard: desc.n_fd_args)!;
+                (void)self.io.read_fd(n_discard: desc.n_fd_args)!;
             }
             continue;
         }
@@ -286,7 +287,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
             {
                 if (sig.type != FD) continue;
 
-                self.io.read_fd(close: args[arg_idx].h)!;
+                (void)self.io.read_fd(close: args[arg_idx].h)!;
             }
         }
     }
@@ -303,12 +304,13 @@ macro write_word(WcbIOImpl io, WcbWord word) @local
  @param obj_id : "Id of object the message is for"
  @param opcode : "Opcode of message"
  @param ... : "Argument types, then argument values"
- @return? types::MESSAGE_TOO_BIG
+ @return? types::MESSAGE_TOO_BIG, WcbIOImpl.dup_fd!
 *>
 macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
 {
     var $n_args = $vaarg.len / 2;
     sz msg_words = 2;  // Message length includes header
+    var $n_fds = 0;
 
     // Find size of message arguments
     $for var $i = 0; $i < $n_args; $i++:
@@ -328,11 +330,14 @@ macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
                 msg_words += 1 + (mem::aligned_offset(
                         $vaarg[$n_args + $i].len, WcbWord::size) >> 2);
             $case WcbArgType.FD:
-                msg_words += 0;
+                $n_fds++;
         $endswitch
     $endfor
 
-    if (msg_words > types::MESSAGE_MAX_LEN >> 2) return types::MESSAGE_TOO_BIG~;
+    $if $n_fds > MESSAGE_MAX_FDS:
+        $error("Message has too many fd args!");
+    $endif
+    if (msg_words > MESSAGE_MAX_LEN >> 2) return types::MESSAGE_TOO_BIG~;
 
     WcbHalfWord msg_len = (WcbHalfWord)msg_words * 4;
 
@@ -373,7 +378,7 @@ macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
                     self.io.write(buf[(slen - min)..]);
                 }
             $case FD:
-                self.io.write({}, fd: (Fd)$vaarg[$n_args + $i]);
+                self.io.write({}, fd: self.io.dup_fd($vaarg[$n_args + $i])!);
         $endswitch
     $endfor
 }
@@ -384,6 +389,6 @@ macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
 *>
 fn bool? WcbConnection.flush(&self)
 {
-    if (&self.io.flush) return self.io.flush(true);
+    if (&self.io.flush) return self.io.flush();
     return true;
 }
