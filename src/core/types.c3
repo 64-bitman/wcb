@@ -104,7 +104,7 @@ interface WcbObject
 
 interface WcbIOImpl
 {
-    fn WcbWord*? read(sz n_words, bool peek = false, bool skip = false);
+    fn sz? read(char[] buf);
     fn Fd? read_fd(sz n_discard = 0, Fd close = -1);
 
     fn void write(char[] data, Fd fd = -1);

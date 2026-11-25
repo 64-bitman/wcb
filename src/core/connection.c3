@@ -21,6 +21,10 @@ struct WcbConnection
     Allocator allocator;
     WcbConnectionImpl impl;
     WcbIOImpl io;
+
+    WcbWord[types::MESSAGE_MAX_LEN * 2] buf;
+    sz buf_woff; // In words
+    sz buf_len; // In bytes
 }
 
 <*
@@ -37,6 +41,9 @@ fn void WcbConnection.init(
     self.allocator = allocator;
     self.impl = impl;
     self.io = io;
+
+    self.buf_woff = 0;
+    self.buf_len = 0;
 }
 
 fn void WcbConnection.uninit(&self)
@@ -50,6 +57,39 @@ fn void WcbConnection.uninit(&self)
     if (&self.io.destroy) self.io.destroy();
 }
 
+fn WcbWord*? get_words(WcbConnection* ct, sz n_words, bool peek = false) @local
+{
+    sz n_bytes = n_words * WcbWord::size;
+    char* bytebuf = (char*)&ct.buf;
+
+    if (n_bytes > ct.buf_len)
+    {
+        // Try reading more data
+        if (ct.buf_woff > 0)
+        {
+            sz off = ct.buf_woff * WcbWord::size;
+            mem::move(&ct.buf, bytebuf + off, ct.buf_len);
+            ct.buf_woff = 0;
+        }
+
+        sz remain = ct.buf.len - ct.buf_len;
+        sz r = ct.io.read(bytebuf[:remain])!;
+
+        ct.buf_len += r;
+    }
+
+    if (n_bytes > ct.buf_len) return null; // Not enough data
+
+    WcbWord* ptr = &ct.buf[ct.buf_woff];
+
+    if (!peek)
+    {
+        ct.buf_woff += n_words;
+        ct.buf_len -= n_bytes;
+    }
+    return ptr;
+}
+
 <*
  @param max_dispatch : "Maximum number of messages to dispatch, default all"
  @return "Number of messages dispatched, any fault is considered fatal"
@@ -61,9 +101,9 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
 
     while (dispatched < max_dispatch)
     {
-        WcbWord* header = self.io.read(2)!;
+        WcbWord* header = get_words(self, 2)!;
 
-        if (header == null) break;  // Incomplete header, or nothing to read
+        if (header == null) break;  // Incomplete header
 
         WcbHalfWord msg_len = (WcbHalfWord)(header[1] >> 16);
 
@@ -78,7 +118,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
         WcbHalfWord msg_words = msg_len >> 2;
         WcbHalfWord arg_words = msg_words - 2;
 
-        if (self.io.read(arg_words, peek: true)! == null)
+        if (get_words(self, arg_words, peek: true)! == null)
         {
             // Incomplete message
             break;
@@ -104,7 +144,8 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
             // If null, then object does not exist. Otherwise if an interface,
             // then the object is a zombie. In both cases ignore the message and
             // consume any fd args (if possible).
-            self.io.read(arg_words, skip: true)!;
+            (void)get_words(self, arg_words);
+
             if (lookup.type == WcbInterface::typeid)
             {
                 iface = lookup.as(WcbInterface*);
@@ -135,7 +176,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
             // Fd args do not take up any space
             if (sig.type != FD)
             {
-                WcbWord* wp = self.io.read(1)!;
+                WcbWord* wp = get_words(self, 1)!;
 
                 if (wp == null) return types::SHORT_MESSAGE~;
                 first_word = *wp;
@@ -164,7 +205,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
                     sz word_len = mem::aligned_offset(len, WcbWord::size) >> 2;
 
                     // Validate string/array length
-                    WcbWord* data = self.io.read(word_len)!;
+                    WcbWord* data = get_words(self, word_len)!;
 
                     if (data == null) return types::SHORT_MESSAGE~;
 

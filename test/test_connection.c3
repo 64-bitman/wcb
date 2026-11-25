@@ -61,18 +61,9 @@ fn void TestConnection.uninit(&self)
     self.closed_fds.free();
 }
 
-fn WcbWord*? TestConnection.read(&self, sz n_words, bool peek, bool skip) @dynamic
+fn sz? TestConnection.read(&self, char[] buf) @dynamic
 {
-    sz len = n_words * WcbWord::size;
-
-    if (len > self.buf.available()!) return null;
-
-    if (peek) return (WcbWord*)&self.buf.bytes[self.buf.cursor()!];
-
-    WcbWord* data = (WcbWord*)&self.buf.bytes[self.buf.cursor()!];
-
-    self.buf.seek(len, whence: FROM_CURSOR)!;
-    return data;
+    return self.buf.read(buf);
 }
 
 fn Fd? TestConnection.read_fd(&self, sz n_discard = 0, Fd close = -1) @dynamic
