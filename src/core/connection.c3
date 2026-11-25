@@ -24,7 +24,7 @@ struct WcbConnection
     WcbConnectionImpl impl;
     WcbIOImpl io;
 
-    WcbWord[MESSAGE_MAX_LEN * 2] buf;
+    WcbWord[] buf;
     sz buf_woff; // In words
     sz buf_len; // In bytes
 }
@@ -33,17 +33,20 @@ struct WcbConnection
  @param [&inout] allocator : "Allocator to use"
  @param [&inout] impl : "Implementation to use"
  @param [&inout] io : "IO implementation to use"
+ @require buf_size % 4 == 0
 *>
 fn void WcbConnection.init(
     &self,
     WcbConnectionImpl impl,
     WcbIOImpl io,
-    Allocator allocator)
+    Allocator allocator,
+    sz buf_size = MESSAGE_MAX_LEN * 2)
 {
     self.allocator = allocator;
     self.impl = impl;
     self.io = io;
 
+    self.buf = alloc::alloc_array(allocator, WcbWord, buf_size >> 2);
     self.buf_woff = 0;
     self.buf_len = 0;
 }
@@ -56,14 +59,20 @@ fn void WcbConnection.uninit(&self)
         (void)self.io.flush();
     }
     if (&self.io.destroy) self.io.destroy();
+
+    alloc::free(self.allocator, self.buf);
 }
 
-fn WcbWord*? get_words(WcbConnection* ct, sz n_words, bool peek = false) @local
+fn WcbWord*? get_words(
+    WcbConnection* ct,
+    sz n_words,
+    bool peek = false,
+    bool move = false) @local
 {
     sz n_bytes = n_words * WcbWord::size;
-    char* bytebuf = (char*)&ct.buf;
+    char* bytebuf = (char*)ct.buf;
 
-    if (n_bytes > ct.buf_len)
+    if (move && n_bytes > ct.buf_len)
     {
         // Try reading more data
         if (ct.buf_woff > 0)
@@ -73,7 +82,7 @@ fn WcbWord*? get_words(WcbConnection* ct, sz n_words, bool peek = false) @local
             ct.buf_woff = 0;
         }
 
-        sz remain = ct.buf.len - ct.buf_len;
+        sz remain = (ct.buf.len * WcbWord::size) - ct.buf_len;
         sz r = ct.io.read(bytebuf[:remain])!;
 
         ct.buf_len += r;
@@ -102,11 +111,17 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
 
     while (dispatched < max_dispatch)
     {
-        WcbWord* header = get_words(self, 2)!;
+        // Only allow shifting memory around now, because later strings/array
+        // args may point into it.
+        WcbWord* header_data = get_words(self, 2, move: true)!;
 
-        if (header == null) break;  // Incomplete header
+        if (header_data == null) break;  // Incomplete header
 
-        WcbHalfWord msg_len = (WcbHalfWord)(header[1] >> 16);
+        WcbWord[2] header;
+
+        mem::copy(&header, header_data, header.len * WcbWord::size);
+
+        WcbHalfWord msg_len = (WcbHalfWord)(header_data[1] >> 16);
 
         // Message must be at least 8 bytes and a multiple of word size
         if (msg_len < 8 || (msg_len & 3) != 0)
@@ -125,8 +140,8 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
             break;
         }
 
-        WcbId obj_id = header[0];
-        WcbHalfWord opcode = (WcbHalfWord)(header[1] & 0x0000ffff);
+        WcbId obj_id = header_data[0];
+        WcbHalfWord opcode = (WcbHalfWord)(header_data[1] & 0x0000ffff);
 
         WcbConnectionImpl impl = self.impl;
         ObjectType* obj;
