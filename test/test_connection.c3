@@ -61,11 +61,7 @@ fn void TestConnection.uninit(&self)
     self.closed_fds.free();
 }
 
-fn WcbWord*? TestConnection.read(
-    &self,
-    sz n_words,
-    bool peek = false,
-    bool skip = false) @dynamic
+fn WcbWord*? TestConnection.read(&self, sz n_words, bool peek, bool skip) @dynamic
 {
     sz len = n_words * WcbWord::size;
 
