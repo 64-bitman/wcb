@@ -4,7 +4,6 @@ import wcb::core::types;
 import wcb::core::wire @public;
 import libc;
 
-const sz MESSAGE_MAX_LEN = 4096;
 const uint MESSAGE_MAX_ARGS = 20;
 
 interface WcbConnectionImpl
@@ -44,7 +43,9 @@ fn void WcbConnection.uninit(&self)
 {
     if (&self.io.flush)
     {
-        (void)self.io.flush();  // Flush any pending data before closing
+        // Flush any pending data before closing
+        (void)self.io.flush(true);
+        (void)self.io.flush(false);
     }
     if (&self.io.destroy) self.io.destroy();
 }
@@ -62,7 +63,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
     {
         WcbWord* header = self.io.read(2)!;
 
-        if (header == null) break;  // Incomplete header
+        if (header == null) break;  // Incomplete header, or nothing to read
 
         WcbHalfWord msg_len = (WcbHalfWord)(header[1] >> 16);
 
@@ -72,7 +73,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
             return types::INVALID_MESSAGE_LENGTH~;
         }
 
-        if (msg_len > MESSAGE_MAX_LEN) return types::MESSAGE_TOO_BIG~;
+        if (msg_len > types::MESSAGE_MAX_LEN) return types::MESSAGE_TOO_BIG~;
 
         WcbHalfWord msg_words = msg_len >> 2;
         WcbHalfWord arg_words = msg_words - 2;
@@ -290,7 +291,7 @@ macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
         $endswitch
     $endfor
 
-    if (msg_words > MESSAGE_MAX_LEN >> 2) return types::MESSAGE_TOO_BIG~;
+    if (msg_words > types::MESSAGE_MAX_LEN >> 2) return types::MESSAGE_TOO_BIG~;
 
     WcbHalfWord msg_len = (WcbHalfWord)msg_words * 4;
 
@@ -342,5 +343,6 @@ macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
 *>
 fn bool? WcbConnection.flush(&self)
 {
-    return self.io.flush();
+    if (&self.io.flush) return self.io.flush(true);
+    return true;
 }
