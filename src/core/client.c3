@@ -114,6 +114,7 @@ fn bool? WcbDisplay.flush(&self)
 fn void? WcbCallback.done(&self, uint data @unused) @dynamic
 {
     self.got_done = true;
+    self.destroy()!;
 }
 
 <*
@@ -167,7 +168,15 @@ fn void? WlDisplay.error(&self, WcbId id, uint code, String msg) @dynamic
 // destroy any proxies (that are zombies).
 fn void? WlDisplay.delete_id(&self, uint id) @dynamic
 {
-    self.display.objects.remove(id)!!;
+    WcbDisplay* display = (WcbDisplay*)self;
+    bool flag = false;
+    void* ptr @unused = display.objects.lookup(id, &flag)!;
+    
+    // If flag is not set, then proxy is therefore not a zombie. This shouldn't
+    // happen.
+    if (@unlikely(!flag)) return types::OBJECT_NOT_DESTROYED~;
+
+    self.display.objects.remove(id)!;
 }
 
 <*

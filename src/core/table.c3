@@ -229,7 +229,7 @@ fn void*? WcbTable.lookup(&self, WcbId id, bool* flag = null)
  @param id : "Object to replace"
  @param [&own] ptr : "Pointer to replace with"
  @param flag : "Boolean flag to set"
- @return? types::BAD_OBJECT_ID
+ @return? types::BAD_OBJECT_ID, types::OBJECT_NOT_EXISTS
 *>
 fn void? WcbTable.replace(&self, WcbId id, void* ptr, bool flag)
 {
@@ -241,7 +241,7 @@ fn void? WcbTable.replace(&self, WcbId id, void* ptr, bool flag)
     WcbTableSlot* slot = &self.slots.entries[i];
 
     // Slot should be occupied
-    assert((slot.next_free & 1) == 0);
+    if (slot.next_free & 1) return types::OBJECT_NOT_EXISTS~;
 
     slot.ptr = ptr;
     slot.next_free |= (uptr)((uint)flag & 1) << 1;
