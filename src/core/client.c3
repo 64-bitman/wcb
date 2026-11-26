@@ -28,6 +28,12 @@ struct WcbProxy (WcbObjectImpl{WcbProxy})
     WcbDisplay* display;
 }
 
+struct WcbCallback @local
+{
+    inline WlCallback base;
+    bool got_done;
+}
+
 <*
  @param [&inout] io : "IO implementation to use"
  @param [&inout] allocator : "Allocator to use"
@@ -105,9 +111,26 @@ fn bool? WcbDisplay.flush(&self)
     return self.ct.flush();
 }
 
+fn void? WcbCallback.done(&self, uint data @unused) @dynamic
+{
+    self.got_done = true;
+}
+
+<*
+*>
 fn sz? WcbDisplay.roundtrip(&self)
 {
-    return 0;
+    WcbCallback callback;
+
+    self.sync(&callback)!;
+
+    sz n_dispatched = 0;
+
+    while (!callback.got_done) n_dispatched += self.dispatch()!;
+
+    callback.destroy()!;
+
+    return n_dispatched;
 }
 
 fn any? WcbDisplay.lookup(&self, WcbId id) @dynamic
