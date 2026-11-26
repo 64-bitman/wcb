@@ -170,6 +170,11 @@ fn Fd? TestConnection.dup_fd(&self, Fd fd) @dynamic @unused
     return fd;
 }
 
+fn bool? TestConnection.flush(&self) @dynamic @unused
+{
+    return true;
+}
+
 fn void test_basic() => @pool()
 {
     TestConnection test;

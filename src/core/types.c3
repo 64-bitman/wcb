@@ -20,6 +20,10 @@ excuse
     OBJECT_LIMIT_REACHED
 }
 
+const sz MESSAGE_MAX_LEN = 4096;
+const uint MESSAGE_MAX_ARGS = 20;
+const uint MESSAGE_MAX_FDS = 28; // Taken from libwayalnd
+
 // Wire types
 alias WcbWord = uint;
 alias WcbHalfWord = ushort;
@@ -106,7 +110,7 @@ interface WcbIOImpl
     fn Fd? read_fd(sz n_discard = 0, Fd close = -1);
 
     fn void write(char[] data, Fd fd = -1);
-    fn bool? flush() @optional;
+    fn bool? flush();
 
     fn Fd? dup_fd(Fd fd);
     fn void destroy() @optional;

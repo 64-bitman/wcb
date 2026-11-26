@@ -83,7 +83,7 @@ fn void? print_constsets(OutStream out, WaylandInterface* iface) @local
 
 fn void? print_types(OutStream out, WaylandInterface* iface) @local
 {
-    printn(out, "typedef %s (%s%s) = %s;",
+    printn(out, "typedef %s (WcbObject, %s%s) = %s;",
             iface_type, iface_type, msg_type, obj_type)!;
     printn(out, "typedef %sId = WcbNewId;", iface_type)!;
     printn(out, "")!;
@@ -112,7 +112,7 @@ fn void? print_types(OutStream out, WaylandInterface* iface) @local
     // Print messages
     foreach (&msg : msgs)
     {
-        print(out, "fn void? %s(", msg.name)!;
+        print(out, "fn void %s(", msg.name)!;
 
         // Print arguments
         foreach (arg_idx, &arg : msg.args)
@@ -272,8 +272,9 @@ fn void? print_interface_struct(OutStream out, WaylandInterface* iface) @local
 
 fn void? print_dispatch(OutStream out, WaylandInterface* iface) @local
 {
-    printn(out, "fn bool? %s.dispatch(&self, WcbHalfWord opcode, WcbArg[] args)",
+    print(out, "fn bool? %s.dispatch(&self, WcbHalfWord opcode, WcbArg[] args)",
             iface_type)!;
+    printni(out, " @dynamic")!;
     printn(out, "{")!;
     tablevel++;
 
@@ -331,7 +332,7 @@ fn void? print_dispatch(OutStream out, WaylandInterface* iface) @local
             }
         }
 
-        printni(out, ")!;")!;
+        printni(out, ");")!;
         printn(out, "return true;")!;
         tablevel--;
 
@@ -350,7 +351,7 @@ fn void? print_dispatch(OutStream out, WaylandInterface* iface) @local
 
 fn void? print_get_interface(OutStream out, WaylandInterface* iface) @local
 {
-    printn(out, "fn WcbInterface* %s.get_interface(&self)", iface_type)!;
+    printn(out, "fn WcbInterface* %s.get_interface(&self) @dynamic", iface_type)!;
     printn(out, "{")!;
     tablevel++;
 
@@ -363,11 +364,12 @@ fn void? print_get_interface(OutStream out, WaylandInterface* iface) @local
 
 fn void? print_instantiate(OutStream out, WaylandInterface* iface) @local
 {
-    printn(out, "fn void? %s.instantiate(&self, %sId new_id) @inline",
+    printn(out, "fn void %s.instantiate(&self, %sId new_id) @inline",
             iface_type, iface_type)!;
     printn(out, "{")!;
     tablevel++;
-    printn(out, "((%s*)self).instantiate((WcbNewId)new_id)!;", obj_type)!;
+    printn(out, "((%s*)self).instantiate((WcbNewId)new_id, %s::typeid)!!;",
+            obj_type, iface_type)!;
     tablevel--;
     printn(out, "}")!;
     printn(out, "")!;
@@ -375,13 +377,17 @@ fn void? print_instantiate(OutStream out, WaylandInterface* iface) @local
 
 fn void? print_methods(OutStream out, WaylandInterface* iface) @local
 {
+    bool has_destroy = false;
+
     foreach (&method : methods)
     {
-        print(out, "fn void? %s.%s(&self", iface_type, method.name)!;
+        print(out, "fn void %s.%s(&self", iface_type, method.name)!;
 
         bool is_registry_bind = false;
         WaylandArg* constructor = null;
         bool is_destructor = method.type == "destructor";
+
+        if (is_destructor) has_destroy = true;
 
         // Print parameters
         foreach (&arg : method.args)
@@ -430,12 +436,14 @@ fn void? print_methods(OutStream out, WaylandInterface* iface) @local
         {
             if (is_registry_bind)
             {
-                printn(out, "obj.instantiate({_name, (WcbObject)self})!;")!;
+                print(out, "obj.instantiate({_name, (WcbObject)self}, ")!;
+                printni(out, "%s::typeid)!!;", iface_type)!;
             }
             else
             {
                 print(out, "((%s*)_%s).create(", obj_type, constructor.name)!;
-                printni(out, "(%s*)self)!;", obj_type)!;
+                printni(out, "(%s*)self, %s::typeid)!!;", obj_type,
+                        get_type(constructor.iface))!;
             }
         }
 
@@ -446,6 +454,7 @@ fn void? print_methods(OutStream out, WaylandInterface* iface) @local
         {
             if (arg.type == "new_id" && arg.iface == "")
             {
+                // Special case for wl_registry.bind
                 printi(out, ", WcbArgType.STRING, WcbArgType.UINT")!;
                 continue;
             }
@@ -461,7 +470,7 @@ fn void? print_methods(OutStream out, WaylandInterface* iface) @local
                 if (arg.iface == "")
                 {
                     // wl_registry.bind
-                    printi(out, "obj.get_interface().name, version")!;
+                    printi(out, "((WcbObject)obj).get_interface().name, version")!;
                 }
                 else
                 {
@@ -477,13 +486,25 @@ fn void? print_methods(OutStream out, WaylandInterface* iface) @local
             printi(out, "_%s", arg.name)!;
         }
 
-        printni(out, ")!;")!;
+        printni(out, ")!!;")!;
 
         if (is_destructor)
         {
-            printn(out, "((%s*)self).destroy()!;", obj_type)!;
+            printn(out, "((%s*)self).destroy()!!;", obj_type)!;
         }
 
+        tablevel--;
+        printn(out, "}")!;
+        printn(out, "")!;
+    }
+
+    if (!has_destroy && iface.name != "wl_display")
+    {
+        // Implicitly add a destroy func (e.g. for wl_registry)
+        printn(out, "fn void %s.destroy(&self)", iface_type)!;
+        printn(out, "{")!;
+        tablevel++;
+        printn(out, "((%s*)self).destroy()!!;", obj_type)!;
         tablevel--;
         printn(out, "}")!;
         printn(out, "")!;

@@ -5,14 +5,20 @@
     "exec-dir": ".",
     "test-sources": [
         "src/core/**",
+        "src/io/**",
         "test/**",
-//      "build/client_protocol.c3",
+        "binding/**",
+        "build/client_protocol.c3",
 //      "build/server_protocol.c3"
     ],
+    "c-sources": [ "src/io/interop.c" ],
+    "cflags": "-O0 -ggdb3",
     "targets": {
         "wcb_scanner": {
             "type": "executable",
-            "sources": [ "src/scanner/**" ]
+            "sources": [
+                "src/scanner/**",
+            ]
         },
         "protocol": {
             "type": "prepare",
@@ -27,8 +33,20 @@
             "depends-on": [ "protocol" ],
             "sources": [
                 "src/core/**",
+                "src/io/**",
                 "build/client_protocol.c3",
                 "build/server_protocol.c3"
+            ]
+        },
+        "example_list_globals": {
+            "type": "executable",
+            "depends-on": [ "protocol", "wcb_scanner" ],
+            "sources": [
+                "src/core/**",
+                "src/io/**",
+                "binding/**",
+                "build/client_protocol.c3",
+                "examples/list_globals.c3"
             ]
         }
     }

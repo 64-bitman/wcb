@@ -4,10 +4,6 @@ import wcb::core::types;
 import wcb::core::wire @public;
 import libc;
 
-const sz MESSAGE_MAX_LEN = 4096;
-const uint MESSAGE_MAX_ARGS = 20;
-const uint MESSAGE_MAX_FDS = 28; // Taken from libwayalnd
-
 interface WcbConnectionImpl
 {
     // Return object with given id, or null if object does not exist. This
@@ -16,6 +12,11 @@ interface WcbConnectionImpl
 
     // Handle the message
     fn bool? handle(WcbMessage* message) @optional;
+}
+
+interface WcbObjectImpl
+{
+    fn typeid get_type();
 }
 
 struct WcbConnection
@@ -33,6 +34,7 @@ struct WcbConnection
  @param [&inout] allocator : "Allocator to use"
  @param [&inout] impl : "Implementation to use"
  @param [&inout] io : "IO implementation to use"
+ @param buf_size : "Buffer size to use in bytes (must be power of 2)"
  @require buf_size % 4 == 0
 *>
 fn void WcbConnection.init(
@@ -40,7 +42,7 @@ fn void WcbConnection.init(
     WcbConnectionImpl impl,
     WcbIOImpl io,
     Allocator allocator,
-    sz buf_size = MESSAGE_MAX_LEN * 2)
+    sz buf_size = types::MESSAGE_MAX_LEN * 2)
 {
     self.allocator = allocator;
     self.impl = impl;
@@ -53,11 +55,9 @@ fn void WcbConnection.init(
 
 fn void WcbConnection.uninit(&self)
 {
-    if (&self.io.flush)
-    {
-        // Flush any pending data before closing
-        (void)self.io.flush();
-    }
+    // Flush any pending data before closing
+    (void)self.io.flush();
+
     if (&self.io.destroy) self.io.destroy();
 
     alloc::free(self.allocator, self.buf);
@@ -129,7 +129,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
             return types::INVALID_MESSAGE_LENGTH~;
         }
 
-        if (msg_len > MESSAGE_MAX_LEN) return types::MESSAGE_TOO_BIG~;
+        if (msg_len > types::MESSAGE_MAX_LEN) return types::MESSAGE_TOO_BIG~;
 
         WcbHalfWord msg_words = msg_len >> 2;
         WcbHalfWord arg_words = msg_words - 2;
@@ -145,10 +145,12 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
 
         WcbConnectionImpl impl = self.impl;
         ObjectType* obj;
-        WcbObject obj_impl;
+        WcbObjectImpl obj_impl;
+        WcbObject obj_iface;
         WcbInterface* iface;
         WcbMessageDesc* desc;
         any lookup;
+        any obj_type;
 
         defer try dispatched++;
 
@@ -172,16 +174,18 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
         }
 
         obj = (ObjectType*)lookup;
-        obj_impl = obj;
-        iface = obj_impl.get_interface();
+        obj_impl = (WcbObjectImpl)obj;
+        obj_type = lookup.retype_to(obj_impl.get_type());
+        obj_iface = (WcbObject)obj_type;
+        iface = obj_iface.get_interface();
         desc = iface.get_message(opcode)!;
 
-        if (desc.signature.len > MESSAGE_MAX_ARGS)
+        if (desc.signature.len > types::MESSAGE_MAX_ARGS)
         {
             unreachable("Message has too many arguments!");
         }
 
-        WcbArg[MESSAGE_MAX_ARGS] args;
+        WcbArg[types::MESSAGE_MAX_ARGS] args;
 
         // Unmarshal message arguments
         foreach (arg_idx, WcbArgSignature sig : desc.signature)
@@ -280,7 +284,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
                     if (new_lookup != null) return types::INVALID_NEW_ID~;
 
                     arg.n.id = new_id;
-                    arg.n.parent = obj_impl;
+                    arg.n.parent = obj_iface;
                 case FD:
                     arg.h = self.io.read_fd()!;
                     if (arg.h == -1) return types::EXPECTED_FD~;
@@ -290,7 +294,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
         }
 
         WcbMessage msg = {
-            .obj = obj_impl,
+            .obj = obj_iface,
             .opcode = opcode,
             .args = args[:desc.signature.len]
         };
@@ -349,10 +353,10 @@ macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
         $endswitch
     $endfor
 
-    $if $n_fds > MESSAGE_MAX_FDS:
+    $if $n_fds > types::MESSAGE_MAX_FDS:
         $error("Message has too many fd args!");
     $endif
-    if (msg_words > MESSAGE_MAX_LEN >> 2) return types::MESSAGE_TOO_BIG~;
+    if (msg_words > types::MESSAGE_MAX_LEN >> 2) return types::MESSAGE_TOO_BIG~;
 
     WcbHalfWord msg_len = (WcbHalfWord)msg_words * 4;
 
@@ -404,6 +408,5 @@ macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
 *>
 fn bool? WcbConnection.flush(&self)
 {
-    if (&self.io.flush) return self.io.flush();
-    return true;
+    return self.io.flush();
 }
