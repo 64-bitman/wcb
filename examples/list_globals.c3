@@ -7,7 +7,7 @@ import std::net::os;
 import std::io;
 import libc;
 
-fn void WlRegistry.global(&self, uint name, String iface, uint version) @dynamic
+fn void? WlRegistry.global(&self, uint name, String iface, uint version) @dynamic
 {
     io::printfn("%s#%d version %d", iface, name, version);
 }
@@ -23,10 +23,10 @@ fn int main(String[] cmdargs)
 
     WlRegistry registry;
 
-    display.get_registry(&registry);
+    display.get_registry(&registry)!!;
 
     display.dispatch()!!;
-    registry.destroy();
+    registry.destroy()!!;
 
     return 0;
 }

@@ -131,7 +131,7 @@ fn bool? WcbDisplay.handle(&self, WcbMessage* message) @dynamic
 }
 
 // Handle "wl_display.error" event from server
-fn void WlDisplay.error(&self, WcbId id, uint code, String msg) @dynamic
+fn void? WlDisplay.error(&self, WcbId id, uint code, String msg) @dynamic
 {
     // Errors are fatal
     self.display.errid = id;
@@ -141,7 +141,7 @@ fn void WlDisplay.error(&self, WcbId id, uint code, String msg) @dynamic
 
 // Handle "wl_display.delete_id" event from server. This allows us to actually
 // destroy any proxies (that are zombies).
-fn void WlDisplay.delete_id(&self, uint id) @dynamic
+fn void? WlDisplay.delete_id(&self, uint id) @dynamic
 {
     self.display.objects.remove(id)!!;
 }
