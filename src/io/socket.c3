@@ -19,13 +19,6 @@ excuse
     BAD_WRITE
 }
 
-struct WcbEnv
-{
-    String wayland_display; // $WAYLAND_DISPLAY
-    String wayland_socket; // $WAYLAND_SOCKET
-    String xdg_runtime_dir; // $XDG_RUNTIME_DIR
-}
-
 struct WcbSocketIO (WcbIOImpl)
 {
     Fd sock_fd;
@@ -46,29 +39,32 @@ extern fn sz send_data(Fd fd, char* buf, usz buflen, Fd *fds,
 <*
  @param [&inout] allocator : "Allocator to use"
  @param [inout] name : "Name of socket to connect to"
- @param [&inout] env : "Environment variables"
  @return? BAD_ENVIRONMENT, ERROR_CONNECTING
  @return? path::tnew!, Path.tappend!, String.is_absolute_path!, os::socket!
  @return? NativeSocket.set_non_blocking!
 *>
-fn void? WcbSocketIO.init(&self, String name, WcbEnv* env, Allocator allocator)
+fn void? WcbSocketIO.init(&self, String name, Allocator allocator)
 {
     self.allocator = allocator;
 
     Fd fd = -1;
     String sock_path = {};
 
+    ZString env_wayland_display = libc::getenv("WAYLAND_DISPLAY");
+    ZString env_wayland_socket = libc::getenv("WAYLAND_SOCKET");
+    ZString env_xdg_runtime_dir = libc::getenv("XDG_RUNTIME_DIR");
+
     if (name != {})
     {
         sock_path = name;
     }
-    if (env.wayland_socket != {})
+    if (env_wayland_socket != null)
     {
-        fd = env.wayland_socket.to_int()!;
+        fd = env_wayland_socket.str_view().to_int()!;
     }
-    else if (env.wayland_display != {})
+    else if (env_wayland_display != null)
     {
-        sock_path = env.wayland_display;
+        sock_path = env_wayland_display.str_view();
     }
     else
     {
@@ -91,7 +87,7 @@ fn void? WcbSocketIO.init(&self, String name, WcbEnv* env, Allocator allocator)
             {
                 Path xdg_runtime_dir;
 
-                if (env.xdg_runtime_dir == {})
+                if (env_xdg_runtime_dir == null)
                 {
                     // Use "/run/user/<uid>"
                     xdg_runtime_dir = path::tnew("/run/user/")!;
@@ -100,7 +96,7 @@ fn void? WcbSocketIO.init(&self, String name, WcbEnv* env, Allocator allocator)
                 }
                 else
                 {
-                    xdg_runtime_dir = path::tnew(env.xdg_runtime_dir)!;
+                    xdg_runtime_dir = path::tnew(env_xdg_runtime_dir.str_view())!;
                 }
 
                 path = xdg_runtime_dir.tappend(sock_path)!;

@@ -16,12 +16,8 @@ fn int main(String[] cmdargs)
 {
     WcbDisplay display;
     WcbSocketIO io;
-    WcbEnv env = {
-        .wayland_display = libc::getenv("WAYLAND_DISPLAY").str_view(),
-        .xdg_runtime_dir = libc::getenv("XDG_RUNTIME_DIR").str_view(),
-    };
 
-    io.init({}, &env, mem)!!;
+    io.init({}, mem)!!;
     display.init(&io, mem);
     defer display.uninit();
 
