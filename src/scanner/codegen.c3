@@ -278,7 +278,8 @@ fn void? print_dispatch(OutStream out, WaylandInterface* iface) @local
     printn(out, "{")!;
     tablevel++;
 
-    printn(out, "%s%s impl = self;", iface_type, msg_type)!;
+    printn(out, "%s%s impl = (%s%s)any_make(self, self.type);", iface_type,
+            msg_type, iface_type, msg_type)!;
     printn(out, "switch (opcode)")!;
     printn(out, "{")!;
     tablevel++;
@@ -332,6 +333,8 @@ fn void? print_dispatch(OutStream out, WaylandInterface* iface) @local
             }
         }
 
+        // Note: if event is a destructor, don't destroy it after calling the
+        // method, let the method do that.
         printni(out, ")!;")!;
         printn(out, "return true;")!;
         tablevel--;
@@ -379,6 +382,7 @@ fn void? print_methods(OutStream out, WaylandInterface* iface) @local
 {
     bool has_destroy = false;
 
+    // TODO: add contracts (such as checking if interface implementor type is a WcbProxy)
     foreach (&method : methods)
     {
         print(out, "fn void? %s.%s(&self", iface_type, method.name)!;
@@ -414,7 +418,7 @@ fn void? print_methods(OutStream out, WaylandInterface* iface) @local
                         printi(out, "WcbId _%s", arg.name)!;
                         break;
                     }
-                    printi(out, "%s* _%s", get_type(arg.iface), arg.name)!;
+                    printi(out, "%s%s _%s", get_type(arg.iface), msg_type, arg.name)!;
                 case "new_id":
                     constructor = arg;
                     if (arg.iface == "")
@@ -424,7 +428,7 @@ fn void? print_methods(OutStream out, WaylandInterface* iface) @local
                         is_registry_bind = true;
                         break;
                     }
-                    printi(out, "%s* _%s", get_type(arg.iface), arg.name)!;
+                    printi(out, "%s%s _%s", get_type(arg.iface), msg_type, arg.name)!;
             }
         }
 
@@ -442,8 +446,7 @@ fn void? print_methods(OutStream out, WaylandInterface* iface) @local
             else
             {
                 print(out, "((%s*)_%s).create(", obj_type, constructor.name)!;
-                printni(out, "(%s*)self, %s::typeid)!;", obj_type,
-                        get_type(constructor.iface))!;
+                printni(out, "(%s*)self, _%s.type)!;", obj_type, constructor.name)!;
             }
         }
 
@@ -474,13 +477,13 @@ fn void? print_methods(OutStream out, WaylandInterface* iface) @local
                 }
                 else
                 {
-                    printi(out, "_%s.id", arg.name)!;
+                    printi(out, "((%s*)_%s).id", obj_type, arg.name)!;
                 }
                 continue;
             }
             if (arg.type == "object")
             {
-                printi(out, "_%s.id", arg.name)!;
+                printi(out, "((%s*)_%s).id", obj_type, arg.name)!;
                 continue;
             }
             printi(out, "_%s", arg.name)!;

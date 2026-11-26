@@ -126,9 +126,10 @@ fn sz? WcbDisplay.roundtrip(&self)
 
     sz n_dispatched = 0;
 
+    defer catch {
+        if (!callback.got_done) callback.destroy()!!;
+    }
     while (!callback.got_done) n_dispatched += self.dispatch()!;
-
-    callback.destroy()!;
 
     return n_dispatched;
 }
