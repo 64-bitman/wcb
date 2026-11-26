@@ -16,7 +16,8 @@ excuse
     BAD_ENVIRONMENT,
     ERROR_CONNECTING,
     BAD_READ,
-    BAD_WRITE
+    BAD_WRITE,
+    BAD_POLL
 }
 
 struct WcbSocketIO (WcbIOImpl)
@@ -202,6 +203,32 @@ fn void WcbSocketIO.write(&self, char[] data, Fd fd) @dynamic
     self.out.push_all(data);
 }
 
+fn WcbIOEvents? WcbSocketIO.poll(&self, WcbIOEvents events) @dynamic
+{
+    Posix_pollfd pfd = {
+        .fd = self.sock_fd,
+    };
+
+    if (events.readable) pfd.events |= os::POLLIN;
+    if (events.writable) pfd.events |= os::POLLOUT;
+
+    while (true)
+    {
+        if (os::poll(&pfd, 1, -1) == -1)
+        {
+            if (os::errno() == Errno.EINTR) continue;
+            return BAD_POLL~;
+        }
+
+        if (pfd.revents & (pfd.events)) break;
+    }
+
+    events.readable = (bool)(pfd.revents & os::POLLIN);
+    events.writable = (bool)(pfd.revents & os::POLLOUT);
+
+    return events;
+}
+
 fn bool? WcbSocketIO.flush(&self) @dynamic
 {
     Fd[types::MESSAGE_MAX_FDS] fdbuf;
@@ -243,7 +270,7 @@ fn bool? WcbSocketIO.flush(&self) @dynamic
         libc::close(self.out_fds.pop_first()!!);
     }
 
-    return remaining > 0;
+    return remaining == 0;
 }
 
 fn Fd? WcbSocketIO.dup_fd(&self, Fd fd) @dynamic

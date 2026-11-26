@@ -58,9 +58,40 @@ fn void WcbDisplay.uninit(&self)
     self.errmsg.free(self.allocator);
 }
 
-fn sz? WcbDisplay.dispatch_events(&self, sz max_events = sz::max)
+<*
+ @param max_events : "Maximum number of events to dispatch"
+ @return "Number of events actually dispatched"
+ @return? WcbConnection{WcbProxy}.dispatch!
+*>
+fn sz? WcbDisplay.dispatch_pending(&self, sz max_events = sz::max)
 {
     return self.ct.dispatch(max_events);
+}
+
+<*
+ @param max_events : "Maximum number of events to dispatch"
+ @return "Number of events actually dispatched"
+ @return? WcbDisplay.dispatch_pending!, WcbDisplay.flush!
+ @return? WcbConnection{WcbProxy}.poll!
+*>
+fn sz? WcbDisplay.dispatch(&self, sz max_events = sz::max)
+{
+    sz n_dispatched = self.dispatch_pending(max_events: max_events)!;
+
+    if (n_dispatched > 0) return n_dispatched;
+
+    while (true)
+    {
+        bool res = self.flush()!;
+
+        if (res) break;
+
+        (void)self.ct.poll({.writable = true})!;
+    }
+
+    (void)self.ct.poll({.readable = true})!;
+
+    return self.dispatch_pending(max_events: max_events)!;
 }
 
 <*
@@ -72,6 +103,11 @@ fn sz? WcbDisplay.dispatch_events(&self, sz max_events = sz::max)
 fn bool? WcbDisplay.flush(&self)
 {
     return self.ct.flush();
+}
+
+fn sz? WcbDisplay.roundtrip(&self)
+{
+    return 0;
 }
 
 fn any? WcbDisplay.lookup(&self, WcbId id) @dynamic

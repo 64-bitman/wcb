@@ -25,21 +25,7 @@ fn int main(String[] cmdargs)
 
     display.get_registry(&registry);
 
-    display.flush()!!;
-
-    Posix_pollfd pfd = {
-        .fd = io.get_fd(),
-        .events = os::POLLIN
-    };
-
-    while (true)
-    {
-        if (os::poll(&pfd, 1, -1) == -1) return 1;
-        if (pfd.revents & os::POLLIN) break;
-    }
-
-    display.dispatch_events()!!;
-
+    display.dispatch()!!;
     registry.destroy();
 
     return 0;

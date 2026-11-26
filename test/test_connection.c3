@@ -165,6 +165,11 @@ fn void TestConnection.write(&self, char[] data, Fd fd = -1) @dynamic
     (void)self.buf.write(data)!!;
 }
 
+fn WcbIOEvents? TestConnection.poll(&self, WcbIOEvents events) @dynamic
+{
+    return events;
+}
+
 fn Fd? TestConnection.dup_fd(&self, Fd fd) @dynamic @unused
 {
     return fd;

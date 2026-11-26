@@ -410,3 +410,13 @@ fn bool? WcbConnection.flush(&self)
 {
     return self.io.flush();
 }
+
+<*
+ @param events : "Events to poll for"
+ @return "Events returned"
+ @return? WcbIOImpl.flush!
+*>
+fn WcbIOEvents? WcbConnection.poll(&self, WcbIOEvents events)
+{
+    return self.io.poll(events)!;
+}

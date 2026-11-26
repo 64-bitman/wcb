@@ -43,6 +43,12 @@ enum WcbArgType
     FD
 }
 
+bitstruct WcbIOEvents : char
+{
+    bool readable: 1;
+    bool writable: 2;
+}
+
 bitstruct WcbArgSignature : char
 {
     WcbArgType type: 0..3;
@@ -112,6 +118,7 @@ interface WcbIOImpl
     fn void write(char[] data, Fd fd = -1);
     fn bool? flush();
 
+    fn WcbIOEvents? poll(WcbIOEvents events);
     fn Fd? dup_fd(Fd fd);
     fn void destroy() @optional;
 }
