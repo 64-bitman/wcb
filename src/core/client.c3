@@ -156,7 +156,7 @@ fn bool? WcbDisplay.handle(&self, WcbMessage* message) @dynamic
 }
 
 // Handle "wl_display.error" event from server
-fn void? WlDisplay.error(&self, WcbId id, uint code, String msg) @dynamic
+fn void? WcbDisplay.error(&self, WcbId id, uint code, String msg) @dynamic
 {
     // Errors are fatal
     self.display.errid = id;
