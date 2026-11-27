@@ -26,7 +26,7 @@ fn WcbInterface* TestObject.get_interface(&self) @dynamic
 
 struct TestConnection (WcbConnectionImpl{TestObject, WcbMessageType.EVENT}, WcbIOImpl) @local
 {
-    inline WcbConnection{TestObject} base;
+    inline WcbConnection{TestObject, WcbMessageType.EVENT} base;
 
     HashMap{WcbId, any} objects;
     WcbId next_id;
@@ -100,7 +100,7 @@ fn any? TestConnection.lookup(&self, WcbId id) @dynamic
 WcbInterface iface1 = {
     .name = "test_object",
     .version = 2,
-    .messages = {
+    .events = {
         {
             .name = "ping",
             .since = 1,
@@ -200,7 +200,7 @@ fn void test_basic() => @pool()
     test.objects.set(obj.id, &obj);
     test.objects.set(obj2.id, &obj2);
 
-    WcbConnection{TestObject} * ct = &test;
+    WcbConnection{TestObject, WcbMessageType.EVENT} * ct = &test;
 
     ct.send(obj.id, 0,
         WcbArgType.INT,
