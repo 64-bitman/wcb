@@ -306,7 +306,15 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
                         return types::OBJECT_NOT_EXISTS~;
                     }
 
-                    arg.o = (WcbObject)anycast(arg_lookup, ObjectType)!!;
+                    WcbObject o = (WcbObject)anycast(arg_lookup, ObjectType)!!;
+
+                    // Check if interface matches
+                    if (!o.get_interface().equal(desc.arg_interfaces[arg_idx]))
+                    {
+                        return types::WRONG_OBJECT~;
+                    }
+
+                    arg.o = o;
                 case NEW_ID:
                     WcbId new_id = first_word;
 

@@ -181,5 +181,6 @@ fn WcbMessageDesc*? WcbInterface.get_message(&self, WcbHalfWord opcode)
 *>
 fn bool WcbInterface.equal(&self, WcbInterface* other)
 {
+    if (other == null) return false;
     return self == other || self.name == other.name;
 }
