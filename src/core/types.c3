@@ -19,7 +19,8 @@ excuse
     BAD_OBJECT_ID,
     OBJECT_LIMIT_REACHED,
     DISPLAY_ERROR,
-    OBJECT_NOT_DESTROYED
+    OBJECT_NOT_DESTROYED,
+    WRONG_OBJECT
 }
 
 const sz MESSAGE_MAX_LEN = 4096;
@@ -108,8 +109,8 @@ struct WcbInterface
     // Version of interface
     WcbVersion version;
 
-    // Events for client, requests for server
-    WcbMessageDesc[] messages;
+    WcbMessageDesc[] events;
+    WcbMessageDesc[] requests;
 }
 
 struct WcbLog
@@ -119,7 +120,6 @@ struct WcbLog
     WcbMessageType type;
     WcbInterface* iface;
     WcbMessageDesc* desc;
-    String desc_name; // Set if "desc" is null
     WcbHalfWord opcode;
     WcbArg[] args;
 }
@@ -165,14 +165,19 @@ fn WcbFixed double.to_fixed(self)
 
 <*
  @param opcode : "Opcode of message to lookup"
+ @param type : "Type of message"
  @return "Message description object"
  @return? BAD_OPCODE
 *>
-fn WcbMessageDesc*? WcbInterface.get_message(&self, WcbHalfWord opcode)
+fn WcbMessageDesc*? WcbInterface.get_message(
+        &self,
+        WcbHalfWord opcode,
+        WcbMessageType type)
 {
-    if (opcode >= self.messages.len) return BAD_OPCODE~;
+    WcbMessageDesc[] descs = type == EVENT ? self.events : self.requests;
+    if (opcode >= descs.len) return BAD_OPCODE~;
 
-    return &self.messages[opcode];
+    return &descs[opcode];
 }
 
 <*

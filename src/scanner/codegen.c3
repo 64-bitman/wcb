@@ -14,6 +14,7 @@ String iface_type;
 String iface_upper;
 String obj_type;
 String msg_type;
+String msg_name;
 WaylandMessage[] msgs;
 WaylandMessage[] methods;
 
@@ -161,17 +162,8 @@ fn void? print_types(OutStream out, WaylandInterface* iface) @local
     printn(out, "")!;
 }
 
-fn void? print_interface_struct(OutStream out, WaylandInterface* iface) @local
+fn void? print_messages(OutStream out, WaylandMessage[] msgs)
 {
-    printn(out, "const WcbInterface %s_INTERFACE = {", iface_upper)!;
-    tablevel++;
-
-    printn(out, ".name = \"%s\",", iface.name)!;
-    printn(out, ".version = %d,", iface.version)!;
-    printn(out, ".messages = {")!;
-    tablevel++;
-
-    // Print incoming message definitions
     foreach (&msg : msgs)
     {
         printn(out, "{")!;
@@ -216,7 +208,8 @@ fn void? print_interface_struct(OutStream out, WaylandInterface* iface) @local
                     {
                         // Special case for wl_registry.bind
                         printni(out, "STRING, .nullable = false},")!;
-                        print(out, "{.type = UINT")!;
+                        printn(out, "{.type = UINT, .nullable = false},")!;
+                        print(out, "{.type = NEW_ID")!;
                         break;
                     }
                     printi(out, "NEW_ID")!;
@@ -244,7 +237,7 @@ fn void? print_interface_struct(OutStream out, WaylandInterface* iface) @local
             {
                 if (arg.iface == "")
                 {
-                    printi(out, "null, null")!;
+                    printi(out, "null, null, null")!;
                     continue;
                 }
                 else
@@ -261,7 +254,25 @@ fn void? print_interface_struct(OutStream out, WaylandInterface* iface) @local
         tablevel--;
         printn(out, "},")!;
     }
+}
 
+fn void? print_interface_struct(OutStream out, WaylandInterface* iface) @local
+{
+    printn(out, "const WcbInterface %s_INTERFACE = {", iface_upper)!;
+    tablevel++;
+
+    printn(out, ".name = \"%s\",", iface.name)!;
+    printn(out, ".version = %d,", iface.version)!;
+
+    printn(out, ".events = {")!;
+    tablevel++;
+    print_messages(out, iface.events)!;
+    tablevel--;
+    printn(out, "},")!;
+
+    printn(out, ".requests = {")!;
+    tablevel++;
+    print_messages(out, iface.requests)!;
     tablevel--;
     printn(out, "}")!;
 
@@ -452,7 +463,6 @@ fn void? print_methods(OutStream out, WaylandInterface* iface) @local
 
         print(out, "((%s*)self).marshal(%sOpcode.%s.ordinal", obj_type,
                 iface_type, method.name.to_upper_tcopy())!;
-        printi(out, ", \"%s\"", method.name)!;
 
         foreach (arg : method.args)
         {
@@ -562,6 +572,7 @@ fn void? generate_code(
         iface_type = iface.name.snake_to_pascal_copy(tmem);
         iface_upper = iface.name.to_upper_tcopy();
         msg_type = client ? "Events" : "Requests";
+        msg_name = client ? "events" : "requests";
         msgs = client ? iface.events : iface.requests;
         methods = client ? iface.requests : iface.events;
 

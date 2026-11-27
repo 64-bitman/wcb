@@ -15,6 +15,12 @@ WlShmPool pool;
 fn void? WlRegistry.global(&self, uint name, String iface, uint version) @dynamic
 {
     // io::printfn("%s#%d version %d", iface, name, version);
+    if (iface == client::wayland::WL_SHM_INTERFACE.name)
+    {
+        self.bind(name, &shm, version)!!;
+
+        shm.create_pool(&pool, 2, 1000)!!;
+    }
 }
 
 fn int main(String[] cmdargs)
@@ -33,6 +39,7 @@ fn int main(String[] cmdargs)
 
     display.get_registry(&registry)!!;
 
+    display.dispatch()!!;
     if (catch err = display.roundtrip())
     {
         if (err == types::DISPLAY_ERROR)

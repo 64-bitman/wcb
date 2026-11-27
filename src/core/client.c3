@@ -10,12 +10,7 @@ import libc;
 alias WcbProxyConnection @local = WcbConnection{WcbProxy, WcbMessageType.EVENT};
 alias WcbProxyTable @local = WcbTable{WcbProxy};
 
-struct WcbDisplay (WcbConnectionImpl
-    {
-        WcbProxy, WcbMessageType.EVENT
-    }
-
-)
+struct WcbDisplay (WcbConnectionImpl{WcbProxy, WcbMessageType.EVENT})
 {
     inline WlDisplay dpy;
 
@@ -293,11 +288,10 @@ fn void? WcbProxy.destroy(&self)
  Marshal a message for the proxy
 
  @param opcode : "Opcode of message to marshal for this proxy"
- @param name : "Name of message"
  @param ... : "Message arguments, first the types then the values"
  @return? WcbProxyConnection.send!
 *>
-macro WcbProxy.marshal(&self, WcbHalfWord opcode, String name, ...)
+macro WcbProxy.marshal(&self, WcbHalfWord opcode, ...)
 {
     self.display.ct.send(self.id, opcode, ...$vaarg)!;
 
@@ -327,6 +321,6 @@ macro WcbProxy.marshal(&self, WcbHalfWord opcode, String name, ...)
         $endfor
 
         self.display.ct.log(impl, self.id, WcbMessageType.REQUEST,
-            iface, null, name, opcode, args[:$n_args]);
+            iface, iface.get_message(opcode, REQUEST)!, opcode, args[:$n_args]);
     }
 }

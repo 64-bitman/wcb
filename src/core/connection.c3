@@ -79,7 +79,6 @@ fn void WcbConnection.log(
         WcbMessageType type,
         WcbInterface* iface,
         WcbMessageDesc* desc,
-        String desc_name,
         WcbHalfWord opcode,
         WcbArg[] args)
 {
@@ -91,7 +90,6 @@ fn void WcbConnection.log(
         .type = type,
         .iface = iface,
         .desc = desc,
-        .desc_name = desc_name,
         .opcode = opcode,
         .args = args
     };
@@ -202,7 +200,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
             if (lookup.type == WcbInterface::typeid)
             {
                 iface = lookup.as(WcbInterface*);
-                desc = iface.get_message(opcode)!;
+                desc = iface.get_message(opcode, INCOMING_TYPE)!;
                 (void)self.io.read_fd(n_discard: desc.n_fd_args)!;
             }
             continue;
@@ -213,7 +211,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
         obj_type = lookup.retype_to(((WcbObjectBase*)obj).type);
         obj_impl = (WcbObject)obj_type;
         iface = obj_impl.get_interface();
-        desc = iface.get_message(opcode)!;
+        desc = iface.get_message(opcode, INCOMING_TYPE)!;
 
         if (desc.signature.len > types::MESSAGE_MAX_ARGS)
         {
@@ -254,6 +252,15 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
                     {
                         if (sig.nullable) break;
                         if (!is_array) return types::NULL_STRING~;
+
+                        if (is_array)
+                        {
+                            arg.a = {};
+                        }
+                        else
+                        {
+                            arg.s = {};
+                        }
                         break;
                     }
 
@@ -342,8 +349,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
             .args = args[:desc.signature.len]
         };
 
-        self.log(obj_impl, obj_id, INCOMING_TYPE, iface, desc, {},
-                opcode, msg.args);
+        self.log(obj_impl, obj_id, INCOMING_TYPE, iface, desc, opcode, msg.args);
 
         if (!impl.handle(&msg)!)
         {
