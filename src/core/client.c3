@@ -180,7 +180,7 @@ fn void? WlDisplay.delete_id(&self, uint id) @dynamic
 }
 
 <*
- @param [inout] parent : "Parent/factory proxy of this proxy"
+ @param [&inout] parent : "Parent/factory proxy of this proxy"
  @param version : "Version to use, otherwise inherit parent version"
  @return? types::DISPLAY_ERROR, WcbTable{WcbProxy}.insert!
 *>

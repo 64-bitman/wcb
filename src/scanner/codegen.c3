@@ -424,7 +424,7 @@ fn void? print_methods(OutStream out, WaylandInterface* iface) @local
                     if (arg.iface == "")
                     {
                         // Special case for wl_registry.bind
-                        printi(out, "%s* obj, WcbVersion version", obj_type)!;
+                        printi(out, "WcbObject obj, WcbVersion version")!;
                         is_registry_bind = true;
                         break;
                     }
@@ -440,8 +440,8 @@ fn void? print_methods(OutStream out, WaylandInterface* iface) @local
         {
             if (is_registry_bind)
             {
-                print(out, "obj.instantiate({_name, (WcbObject)self}, ")!;
-                printni(out, "%s::typeid)!;", iface_type)!;
+                print(out, "((%s*)obj).create((WcbProxy*)self", obj_type)!;
+                printni(out, ", obj.type, version: version)!;")!;
             }
             else
             {
