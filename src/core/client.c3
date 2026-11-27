@@ -184,7 +184,7 @@ fn void? WcbDisplay.delete_id(&self, uint id) @dynamic
 <*
  @param [&inout] parent : "Parent/factory proxy of this proxy"
  @param version : "Version to use, otherwise inherit parent version"
- @return? types::DISPLAY_ERROR, WcbTable{WcbProxy}.insert!
+ @return? WcbTable{WcbProxy}.insert!
 *>
 fn void? WcbProxy.create(
         &self,
@@ -192,8 +192,6 @@ fn void? WcbProxy.create(
         typeid type,
         WcbVersion version = 0)
 {
-    if (@unlikely(parent.display.errid != 0)) return types::DISPLAY_ERROR~;
-
     self.type = type;
     self.id = parent.display.objects.insert(self)!;
     if (version == 0)
@@ -209,13 +207,11 @@ fn void? WcbProxy.create(
 
 <*
  @param new_id : "New id of proxy to instantiate"
- @return? types::DISPLAY_ERROR, WcbTable{WcbProxy}.insert_peer!
+ @return? WcbTable{WcbProxy}.insert_peer!
 *>
 fn void? WcbProxy.instantiate(&self, WcbNewId new_id, typeid type)
 {
     WcbProxy* parent = (WcbProxy*)new_id.parent;
-
-    if (@unlikely(parent.display.errid != 0)) return types::DISPLAY_ERROR~;
 
     parent.display.objects.insert_peer(new_id.id, self)!;
     self.type = type;
@@ -225,14 +221,10 @@ fn void? WcbProxy.instantiate(&self, WcbNewId new_id, typeid type)
 }
 
 <*
- @return? types::DISPLAY_ERROR, WcbTable{WcbProxy}.replace!
+ @return? WcbTable{WcbProxy}.replace!
 *>
 fn void? WcbProxy.destroy(&self)
 {
-    // It is counterintuitive to prevent destroying proxies after a display
-    // error
-    // if (@unlikely(self.display.errid != 0)) return types::DISPLAY_ERROR~;
-
     // Don't destroy object immediately, turn it into a zombie and wait for
     // delete_id event.
     WcbObject impl = (WcbObject)any_make(self, self.type);
@@ -248,11 +240,9 @@ fn typeid WcbProxy.get_type(&self) @dynamic
 <*
  @param opcode : "Opcode of message to marshal for this proxy"
  @param ... : "Message arguments, first the types then the values"
- @return? types::DISPLAY_ERROR, WcbConnection{WcbProxy}.send!
+ @return? WcbConnection{WcbProxy}.send!
 *>
 macro WcbProxy.marshal(&self, WcbHalfWord opcode, ...)
 {
-    if (@unlikely(self.display.errid != 0)) return types::DISPLAY_ERROR~;
-
     self.display.ct.send(self.id, opcode, ...$vaarg)!;
 }
