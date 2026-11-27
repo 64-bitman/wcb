@@ -24,7 +24,7 @@ fn WcbInterface* TestObject.get_interface(&self) @dynamic
     return self.iface;
 }
 
-struct TestConnection (WcbConnectionImpl{TestObject}, WcbIOImpl) @local
+struct TestConnection (WcbConnectionImpl{TestObject, WcbMessageType.EVENT}, WcbIOImpl) @local
 {
     inline WcbConnection{TestObject} base;
 

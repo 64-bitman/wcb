@@ -45,6 +45,12 @@ enum WcbArgType
     FD
 }
 
+enum WcbMessageType : char (String str)
+{
+    EVENT {"event"},
+    REQUEST {"request"}
+}
+
 bitstruct WcbIOEvents : char
 {
     bool readable: 1;
@@ -106,6 +112,18 @@ struct WcbInterface
     WcbMessageDesc[] messages;
 }
 
+struct WcbLog
+{
+    WcbObject obj;
+    WcbId obj_id;
+    WcbMessageType type;
+    WcbInterface* iface;
+    WcbMessageDesc* desc;
+    String desc_name; // Set if "desc" is null
+    WcbHalfWord opcode;
+    WcbArg[] args;
+}
+
 interface WcbObject
 {
     fn bool? dispatch(WcbHalfWord opcode, WcbArg[] args);
@@ -125,6 +143,12 @@ interface WcbIOImpl
     fn WcbIOEvents? poll(WcbIOEvents events);
     fn Fd? dup_fd(Fd fd);
     fn void destroy() @optional;
+}
+
+interface WcbLogger
+{
+    fn bool is_enabled();
+    fn void? log(WcbLog* info);
 }
 
 <* Convert a fixed point to a double *>

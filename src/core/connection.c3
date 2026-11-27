@@ -1,4 +1,4 @@
-module wcb::core::connection <ObjectType> @private;
+module wcb::core::connection <ObjectType, INCOMING_TYPE> @private;
 
 import wcb::core::types;
 import wcb::core::wire @public;
@@ -19,6 +19,7 @@ struct WcbConnection
     Allocator allocator;
     WcbConnectionImpl impl;
     WcbIOImpl io;
+    WcbLogger logger; // May be null
 
     WcbWord[] buf;
     sz buf_woff; // In words
@@ -49,6 +50,7 @@ fn void WcbConnection.init(
     self.allocator = allocator;
     self.impl = impl;
     self.io = io;
+    self.logger = null;
 
     self.buf = alloc::alloc_array(allocator, WcbWord, buf_size >> 2);
     self.buf_woff = 0;
@@ -63,6 +65,38 @@ fn void WcbConnection.uninit(&self)
     if (&self.io.destroy) self.io.destroy();
 
     alloc::free(self.allocator, self.buf);
+}
+
+fn void WcbConnection.set_logger(&self, WcbLogger logger)
+{
+    self.logger = logger;
+}
+
+fn void WcbConnection.log(
+        &self,
+        WcbObject obj,
+        WcbId obj_id,
+        WcbMessageType type,
+        WcbInterface* iface,
+        WcbMessageDesc* desc,
+        String desc_name,
+        WcbHalfWord opcode,
+        WcbArg[] args)
+{
+    if (self.logger == null) return;
+
+    WcbLog log = {
+        .obj = obj,
+        .obj_id = obj_id,
+        .type = type,
+        .iface = iface,
+        .desc = desc,
+        .desc_name = desc_name,
+        .opcode = opcode,
+        .args = args
+    };
+
+    (void)self.logger.log(&log);
 }
 
 fn WcbWord*? get_words(
@@ -300,6 +334,9 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
             .args = args[:desc.signature.len]
         };
 
+        self.log(obj_impl, obj_id, INCOMING_TYPE, iface, desc, {},
+                opcode, msg.args);
+
         if (!impl.handle(&msg)!)
         {
             // Message was not handled, close any fd args
@@ -335,29 +372,30 @@ macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
     // Find size of message arguments
     $for var $i = 0; $i < $n_args; $i++:
         $if $reflect($vaarg[$i]).type != WcbArgType:
-        $error("Argument type is not WcbArgType!");
-    $endif
+            $error("Argument type is not WcbArgType!");
+        $endif
 
         $switch ($vaarg[$i]):
             $case WcbArgType.INT:
-             $case WcbArgType.UINT:
-             $case WcbArgType.FIXED:
-             $case WcbArgType.OBJECT:
-             $case WcbArgType.NEW_ID:
-             msg_words++;
-    $case WcbArgType.STRING:
-        $case WcbArgType.ARRAY:
-        msg_words += 1 + (mem::aligned_offset(
-                    $vaarg[$n_args + $i].len, WcbWord::size) >> 2);
-    $case WcbArgType.FD:
-        $n_fds++;
-    $endswitch
-        $endfor
+            $case WcbArgType.UINT:
+            $case WcbArgType.FIXED:
+            $case WcbArgType.OBJECT:
+            $case WcbArgType.NEW_ID:
+                msg_words++;
+            $case WcbArgType.STRING:
+            $case WcbArgType.ARRAY:
+                msg_words += 1 + (mem::aligned_offset(
+                            $vaarg[$n_args + $i].len, WcbWord::size) >> 2);
+            $case WcbArgType.FD:
+                $n_fds++;
+        $endswitch
+    $endfor
 
-        $if $n_fds > types::MESSAGE_MAX_FDS:
+    $if $n_fds > types::MESSAGE_MAX_FDS:
         $error("Message has too many fd args!");
     $endif
-        if (msg_words > types::MESSAGE_MAX_LEN >> 2) return types::MESSAGE_TOO_BIG~;
+
+    if (msg_words > types::MESSAGE_MAX_LEN >> 2) return types::MESSAGE_TOO_BIG~;
 
     WcbHalfWord msg_len = (WcbHalfWord)msg_words * 4;
 
@@ -370,37 +408,37 @@ macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
     $for var $i = 0; $i < $n_args; $i++:
         $switch ($vaarg[$i]):
             $case INT:
-             $case UINT:
-             $case FIXED:
-             write_word(self.io, (WcbWord)$vaarg[$n_args + $i]);
-    $case OBJECT:
-        $case NEW_ID:
-        write_word(self.io, (WcbWord)$vaarg[$n_args + $i]);
-    $case STRING:
-        $case ARRAY:
-        slen = $vaarg[$n_args + $i].len;  // In bytes
-    min = (slen & ~3U);
+            $case UINT:
+            $case FIXED:
+                write_word(self.io, (WcbWord)$vaarg[$n_args + $i]);
+            $case OBJECT:
+            $case NEW_ID:
+                write_word(self.io, (WcbWord)$vaarg[$n_args + $i]);
+            $case STRING:
+            $case ARRAY:
+                slen = $vaarg[$n_args + $i].len;  // In bytes
+                min = (slen & ~3U);
 
-    if ($vaarg[$i] == STRING) slen++; // Length includes NUL
-    write_word(self.io, slen);
+                if ($vaarg[$i] == STRING) slen++; // Length includes NUL
+                write_word(self.io, slen);
 
-    self.io.write($vaarg[$n_args + $i]);
-    $if $vaarg[$i] == STRING:
-        self.io.write(((char*)&&'\0')[:1]); // Add NUL byte
-    $endif
+                self.io.write($vaarg[$n_args + $i]);
+                $if $vaarg[$i] == STRING:
+                    self.io.write(((char*)&&'\0')[:1]); // Add NUL byte
+                $endif
 
-        // If length if not a multiple of word size, copy leftover
-        // bytes.
-        if (slen - min > 0)
-        {
-            char[4] buf;
+                // If length if not a multiple of word size, copy leftover
+                // bytes.
+                if (slen - min > 0)
+                {
+                    char[4] buf;
 
-            self.io.write(buf[(slen - min)..]);
-        }
-    $case FD:
-        self.io.write({}, fd: self.io.dup_fd($vaarg[$n_args + $i])!);
-    $endswitch
-        $endfor
+                    self.io.write(buf[(slen - min)..]);
+                }
+            $case FD:
+                self.io.write({}, fd: self.io.dup_fd($vaarg[$n_args + $i])!);
+        $endswitch
+    $endfor
 }
 
 <*

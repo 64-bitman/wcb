@@ -452,6 +452,7 @@ fn void? print_methods(OutStream out, WaylandInterface* iface) @local
 
         print(out, "((%s*)self).marshal(%sOpcode.%s.ordinal", obj_type,
                 iface_type, method.name.to_upper_tcopy())!;
+        printi(out, ", \"%s\"", method.name)!;
 
         foreach (arg : method.args)
         {

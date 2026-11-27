@@ -3,12 +3,6 @@ module wcb::core::wire @private;
 import wcb::core::types;
 import libc;
 
-enum WcbMessageType
-{
-    EVENT,
-    REQUEST
-}
-
 enum WcbEntity : char (uint base_id, WcbMessageType incoming_type)
 {
     CLIENT {0x1, EVENT},
