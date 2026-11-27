@@ -65,6 +65,9 @@ fn void WcbDisplay.uninit(&self)
 }
 
 <*
+ Dispatch any pending events waiting on the socket. This does not block waiting
+ for input.
+
  @param max_events : "Maximum number of events to dispatch"
  @return "Number of events actually dispatched"
  @return? WcbConnection{WcbProxy}.dispatch!
@@ -75,6 +78,8 @@ fn sz? WcbDisplay.dispatch_pending(&self, sz max_events = sz::max)
 }
 
 <*
+ Same as dispatch_pending() but block for input if necessary.
+
  @param max_events : "Maximum number of events to dispatch"
  @return "Number of events actually dispatched"
  @return? WcbDisplay.dispatch_pending!, WcbDisplay.flush!
@@ -118,6 +123,11 @@ fn void? WcbCallback.done(&self, uint data @unused) @dynamic
 }
 
 <*
+ Do a roundtrip by sending a wl_display.sync request and waiting for the
+ wl_callback event.
+
+ @return "Number of events dispatched"
+ @return? types::DISPLAY_ERROR, WcbDisplay.dispatch!, WcbProxy.destroy!
 *>
 fn sz? WcbDisplay.roundtrip(&self)
 {
@@ -173,7 +183,7 @@ fn void? WcbDisplay.delete_id(&self, uint id) @dynamic
     WcbDisplay* display = (WcbDisplay*)self;
     bool flag = false;
     void* ptr @unused = display.objects.lookup(id, &flag)!;
-    
+
     // If flag is not set, then proxy is therefore not a zombie. This shouldn't
     // happen.
     if (@unlikely(!flag)) return types::OBJECT_NOT_DESTROYED~;

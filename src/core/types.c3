@@ -114,7 +114,9 @@ interface WcbObject
 
 interface WcbIOImpl
 {
+    // Should not block
     fn sz? read(char[] buf);
+
     fn Fd? read_fd(sz n_discard = 0, Fd close = -1);
 
     fn void write(char[] data, Fd fd = -1);

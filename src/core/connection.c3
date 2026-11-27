@@ -145,8 +145,8 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
 
         WcbConnectionImpl impl = self.impl;
         ObjectType* obj;
-        WcbObjectImpl obj_impl;
-        WcbObject obj_iface;
+        WcbObjectImpl obj_impl; // Implementation of the backing object
+        WcbObject obj_iface; // Implementation of the actual protocol object
         WcbInterface* iface;
         WcbMessageDesc* desc;
         any lookup;
