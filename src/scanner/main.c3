@@ -11,8 +11,8 @@ const String VERSION = "0.0.1";
 fn void help() @private
 {
     io::printfn(
-        "Usage: wcb_scanner [OPTION] {module_prefix} {client|server} {input_file} {output_fule}"
-    );
+            "Usage: wcb_scanner [OPTION] {module_prefix} {client|server} {input_file} {output_fule}"
+            );
     io::printfn("");
     io::printfn("Convert Wayland XML protocol files into C3 code files");
     io::printfn("");
@@ -50,9 +50,9 @@ fn int main(String[] cmdargs)
             else
             {
                 io::eprintfn(
-                    "Unknown argument %s",
-                    longopt == "" ? arg[..1] : arg[2..]
-                );
+                        "Unknown argument %s",
+                        longopt == "" ? arg[..1] : arg[2..]
+                        );
                 return 1;
             }
         }
@@ -95,8 +95,8 @@ fn int main(String[] cmdargs)
     @pool()
     {
         WaylandProtocol*? protocol = parser::generate_tree(
-            path::new(tmem, in_file)!!,
-        );
+                path::new(tmem, in_file)!!,
+                );
 
         if (catch err = protocol)
         {
@@ -111,11 +111,11 @@ fn int main(String[] cmdargs)
         }
 
         if (catch err = codegen::generate_code(
-                protocol,
-                modname,
-                path::new(tmem, out_file)!!,
-                gen_type == "client"
-        ))
+                    protocol,
+                    modname,
+                    path::new(tmem, out_file)!!,
+                    gen_type == "client"
+                    ))
         {
             io::eprintfn("Error generating code: %s", err.short_name());
             return 1;

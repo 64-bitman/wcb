@@ -278,8 +278,8 @@ fn void? print_dispatch(OutStream out, WaylandInterface* iface) @local
     printn(out, "{")!;
     tablevel++;
 
-    printn(out, "%s%s impl = (%s%s)any_make(self, self.type);", iface_type,
-            msg_type, iface_type, msg_type)!;
+    printn(out, "%s%s impl = (%s%s)any_make(self, self.base.type);",
+            iface_type, msg_type, iface_type, msg_type)!;
     printn(out, "switch (opcode)")!;
     printn(out, "{")!;
     tablevel++;
@@ -518,11 +518,11 @@ fn void? print_methods(OutStream out, WaylandInterface* iface) @local
 
 // Generate C3 code, yay!
 fn void? generate_code(
-    WaylandProtocol* protocol,
-    String module_prefix,
-    Path out_file,
-    bool is_client,
-) => @pool()
+        WaylandProtocol* protocol,
+        String module_prefix,
+        Path out_file,
+        bool is_client,
+        ) => @pool()
 {
     File? fp = file::open_path(out_file, "w");
 

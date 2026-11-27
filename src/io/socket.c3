@@ -14,10 +14,10 @@ import libc;
 excuse
 {
     BAD_ENVIRONMENT,
-    ERROR_CONNECTING,
-    BAD_READ,
-    BAD_WRITE,
-    BAD_POLL
+        ERROR_CONNECTING,
+        BAD_READ,
+        BAD_WRITE,
+        BAD_POLL
 }
 
 struct WcbSocketIO (WcbIOImpl)
@@ -34,16 +34,16 @@ struct WcbSocketIO (WcbIOImpl)
 extern fn sz receive_data(Fd fd, char* buf, usz bufsz, int *fds, usz* fds_read)
     @cname("receive_data") @local;
 
-extern fn sz send_data(Fd fd, char* buf, usz buflen, Fd *fds,
-        usz fds_len, usz* fds_sent) @cname("send_data") @local;
+    extern fn sz send_data(Fd fd, char* buf, usz buflen, Fd *fds,
+            usz fds_len, usz* fds_sent) @cname("send_data") @local;
 
 <*
- @param [&inout] allocator : "Allocator to use"
- @param [inout] name : "Name of socket to connect to"
- @return? BAD_ENVIRONMENT, ERROR_CONNECTING
- @return? path::tnew!, Path.tappend!, String.is_absolute_path!, os::socket!
- @return? NativeSocket.set_non_blocking!
-*>
+@param [&inout] allocator : "Allocator to use"
+@param [inout] name : "Name of socket to connect to"
+@return? BAD_ENVIRONMENT, ERROR_CONNECTING
+@return? path::tnew!, Path.tappend!, String.is_absolute_path!, os::socket!
+@return? NativeSocket.set_non_blocking!
+    *>
 fn void? WcbSocketIO.init(&self, String name, Allocator allocator)
 {
     self.allocator = allocator;
@@ -142,8 +142,8 @@ fn void WcbSocketIO.uninit(&self)
 }
 
 <*
- @return "Return socket fd for this connection"
-*>
+@return "Return socket fd for this connection"
+    *>
 fn Fd WcbSocketIO.get_fd(&self)
 {
     return self.sock_fd;

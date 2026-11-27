@@ -25,19 +25,26 @@ struct WcbConnection
     sz buf_len; // In bytes
 }
 
+struct WcbObjectBase
+{
+    typeid type;
+    WcbId id;
+    WcbVersion version;
+}
+
 <*
- @param [&inout] allocator : "Allocator to use"
- @param [&inout] impl : "Implementation to use"
- @param [&inout] io : "IO implementation to use"
- @param buf_size : "Buffer size to use in bytes (must be power of 2)"
- @require buf_size % 4 == 0
-*>
+@param [&inout] allocator : "Allocator to use"
+@param [&inout] impl : "Implementation to use"
+@param [&inout] io : "IO implementation to use"
+@param buf_size : "Buffer size to use in bytes (must be power of 2)"
+@require buf_size % 4 == 0
+    *>
 fn void WcbConnection.init(
-    &self,
-    WcbConnectionImpl impl,
-    WcbIOImpl io,
-    Allocator allocator,
-    sz buf_size = types::MESSAGE_MAX_LEN * 2)
+        &self,
+        WcbConnectionImpl impl,
+        WcbIOImpl io,
+        Allocator allocator,
+        sz buf_size = types::MESSAGE_MAX_LEN * 2)
 {
     self.allocator = allocator;
     self.impl = impl;
@@ -59,10 +66,10 @@ fn void WcbConnection.uninit(&self)
 }
 
 fn WcbWord*? get_words(
-    WcbConnection* ct,
-    sz n_words,
-    bool peek = false,
-    bool move = false) @local
+        WcbConnection* ct,
+        sz n_words,
+        bool peek = false,
+        bool move = false) @local
 {
     sz n_bytes = n_words * WcbWord::size;
     char* bytebuf = (char*)ct.buf;
@@ -96,10 +103,10 @@ fn WcbWord*? get_words(
 }
 
 <*
- @param max_dispatch : "Maximum number of messages to dispatch, default all"
- @return "Number of messages dispatched, any fault is considered fatal"
- @return? WcbIOImpl.read!, WcbConnectionImpl.lookup!
-*>
+@param max_dispatch : "Maximum number of messages to dispatch, default all"
+@return "Number of messages dispatched, any fault is considered fatal"
+@return? WcbIOImpl.read!, WcbConnectionImpl.lookup!
+    *>
 fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
 {
     sz dispatched = 0;
@@ -140,7 +147,7 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
 
         WcbConnectionImpl impl = self.impl;
         ObjectType* obj;
-        WcbObject obj_iface; // Implementation of the actual protocol object
+        WcbObject obj_impl; // Implementation of the actual protocol object
         WcbInterface* iface;
         WcbMessageDesc* desc;
         any lookup;
@@ -168,12 +175,10 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
         }
 
         obj = (ObjectType*)lookup;
-$if !$defined(obj.type):
-    $error("Object does not have type member!");
-$endif
-        obj_type = lookup.retype_to(obj.type);
-        obj_iface = (WcbObject)obj_type;
-        iface = obj_iface.get_interface();
+
+        obj_type = lookup.retype_to(((WcbObjectBase*)obj).type);
+        obj_impl = (WcbObject)obj_type;
+        iface = obj_impl.get_interface();
         desc = iface.get_message(opcode)!;
 
         if (desc.signature.len > types::MESSAGE_MAX_ARGS)
@@ -280,7 +285,7 @@ $endif
                     if (new_lookup != null) return types::INVALID_NEW_ID~;
 
                     arg.n.id = new_id;
-                    arg.n.parent = obj_iface;
+                    arg.n.parent = obj_impl;
                 case FD:
                     arg.h = self.io.read_fd()!;
                     if (arg.h == -1) return types::EXPECTED_FD~;
@@ -290,7 +295,7 @@ $endif
         }
 
         WcbMessage msg = {
-            .obj = obj_iface,
+            .obj = obj_impl,
             .opcode = opcode,
             .args = args[:desc.signature.len]
         };
@@ -316,11 +321,11 @@ macro write_word(WcbIOImpl io, WcbWord word) @local
 }
 
 <*
- @param obj_id : "Id of object the message is for"
- @param opcode : "Opcode of message"
- @param ... : "Argument types, then argument values"
- @return? types::MESSAGE_TOO_BIG, WcbIOImpl.dup_fd!
-*>
+@param obj_id : "Id of object the message is for"
+@param opcode : "Opcode of message"
+@param ... : "Argument types, then argument values"
+@return? types::MESSAGE_TOO_BIG, WcbIOImpl.dup_fd!
+    *>
 macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
 {
     var $n_args = $vaarg.len / 2;
@@ -330,29 +335,29 @@ macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
     // Find size of message arguments
     $for var $i = 0; $i < $n_args; $i++:
         $if $reflect($vaarg[$i]).type != WcbArgType:
-            $error("Argument type is not WcbArgType!");
-        $endif
+        $error("Argument type is not WcbArgType!");
+    $endif
 
         $switch ($vaarg[$i]):
             $case WcbArgType.INT:
-            $case WcbArgType.UINT:
-            $case WcbArgType.FIXED:
-            $case WcbArgType.OBJECT:
-            $case WcbArgType.NEW_ID:
-                msg_words++;
-            $case WcbArgType.STRING:
-            $case WcbArgType.ARRAY:
-                msg_words += 1 + (mem::aligned_offset(
-                        $vaarg[$n_args + $i].len, WcbWord::size) >> 2);
-            $case WcbArgType.FD:
-                $n_fds++;
-        $endswitch
-    $endfor
+             $case WcbArgType.UINT:
+             $case WcbArgType.FIXED:
+             $case WcbArgType.OBJECT:
+             $case WcbArgType.NEW_ID:
+             msg_words++;
+    $case WcbArgType.STRING:
+        $case WcbArgType.ARRAY:
+        msg_words += 1 + (mem::aligned_offset(
+                    $vaarg[$n_args + $i].len, WcbWord::size) >> 2);
+    $case WcbArgType.FD:
+        $n_fds++;
+    $endswitch
+        $endfor
 
-    $if $n_fds > types::MESSAGE_MAX_FDS:
+        $if $n_fds > types::MESSAGE_MAX_FDS:
         $error("Message has too many fd args!");
     $endif
-    if (msg_words > types::MESSAGE_MAX_LEN >> 2) return types::MESSAGE_TOO_BIG~;
+        if (msg_words > types::MESSAGE_MAX_LEN >> 2) return types::MESSAGE_TOO_BIG~;
 
     WcbHalfWord msg_len = (WcbHalfWord)msg_words * 4;
 
@@ -365,53 +370,53 @@ macro WcbConnection.send(&self, WcbId obj_id, WcbHalfWord opcode, ...)
     $for var $i = 0; $i < $n_args; $i++:
         $switch ($vaarg[$i]):
             $case INT:
-            $case UINT:
-            $case FIXED:
-                write_word(self.io, (WcbWord)$vaarg[$n_args + $i]);
-            $case OBJECT:
-            $case NEW_ID:
-                write_word(self.io, (WcbWord)$vaarg[$n_args + $i]);
-            $case STRING:
-            $case ARRAY:
-                slen = $vaarg[$n_args + $i].len;  // In bytes
-                min = (slen & ~3U);
+             $case UINT:
+             $case FIXED:
+             write_word(self.io, (WcbWord)$vaarg[$n_args + $i]);
+    $case OBJECT:
+        $case NEW_ID:
+        write_word(self.io, (WcbWord)$vaarg[$n_args + $i]);
+    $case STRING:
+        $case ARRAY:
+        slen = $vaarg[$n_args + $i].len;  // In bytes
+    min = (slen & ~3U);
 
-                if ($vaarg[$i] == STRING) slen++; // Length includes NUL
-                write_word(self.io, slen);
+    if ($vaarg[$i] == STRING) slen++; // Length includes NUL
+    write_word(self.io, slen);
 
-                self.io.write($vaarg[$n_args + $i]);
-                $if $vaarg[$i] == STRING:
-                    self.io.write(((char*)&&'\0')[:1]); // Add NUL byte
-                $endif
+    self.io.write($vaarg[$n_args + $i]);
+    $if $vaarg[$i] == STRING:
+        self.io.write(((char*)&&'\0')[:1]); // Add NUL byte
+    $endif
 
-                // If length if not a multiple of word size, copy leftover
-                // bytes.
-                if (slen - min > 0)
-                {
-                    char[4] buf;
+        // If length if not a multiple of word size, copy leftover
+        // bytes.
+        if (slen - min > 0)
+        {
+            char[4] buf;
 
-                    self.io.write(buf[(slen - min)..]);
-                }
-            $case FD:
-                self.io.write({}, fd: self.io.dup_fd($vaarg[$n_args + $i])!);
-        $endswitch
-    $endfor
+            self.io.write(buf[(slen - min)..]);
+        }
+    $case FD:
+        self.io.write({}, fd: self.io.dup_fd($vaarg[$n_args + $i])!);
+    $endswitch
+        $endfor
 }
 
 <*
- @return "Return true if all pending messages were sent, otherwise false"
- @return? WcbIOImpl.flush!
-*>
+@return "Return true if all pending messages were sent, otherwise false"
+@return? WcbIOImpl.flush!
+    *>
 fn bool? WcbConnection.flush(&self)
 {
     return self.io.flush();
 }
 
 <*
- @param events : "Events to poll for"
- @return "Events returned"
- @return? WcbIOImpl.flush!
-*>
+@param events : "Events to poll for"
+@return "Events returned"
+@return? WcbIOImpl.flush!
+    *>
 fn WcbIOEvents? WcbConnection.poll(&self, WcbIOEvents events)
 {
     return self.io.poll(events)!;

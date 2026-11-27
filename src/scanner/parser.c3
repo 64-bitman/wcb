@@ -150,17 +150,17 @@ fn void? WaylandInterface.init(&self, XmlNode* node)
     if (request_list.len() > 0)
     {
         self.requests = alloc::new_array(
-            tmem,
-            WaylandMessage,
-            request_list.len()
-        );
+                tmem,
+                WaylandMessage,
+                request_list.len()
+                );
 
         foreach (idx, event_node : request_list)
         {
             defer catch io::eprintfn(
-                "Error parsing request in interface %s",
-                self.name
-            );
+                    "Error parsing request in interface %s",
+                    self.name
+                    );
             self.requests[idx].init(event_node)!;
         }
     }
@@ -175,9 +175,9 @@ fn void? WaylandInterface.init(&self, XmlNode* node)
         foreach (idx, event_node : event_list)
         {
             defer catch io::eprintfn(
-                "Error parsing event in interface %s",
-                self.name
-            );
+                    "Error parsing event in interface %s",
+                    self.name
+                    );
             self.events[idx].init(event_node)!;
         }
     }
@@ -192,9 +192,9 @@ fn void? WaylandInterface.init(&self, XmlNode* node)
         foreach (idx, enum_node : enum_list)
         {
             defer catch io::eprintfn(
-                "Error parsing enum in interface %s",
-                self.name
-            );
+                    "Error parsing enum in interface %s",
+                    self.name
+                    );
             self.enums[idx].init(enum_node)!;
         }
     }
@@ -219,9 +219,9 @@ fn void? WaylandMessage.init(&self, XmlNode* node)
         foreach (idx, arg_node : arg_list)
         {
             defer catch io::eprintfn(
-                "Error parsing arg in message %s",
-                self.name
-            );
+                    "Error parsing arg in message %s",
+                    self.name
+                    );
             self.args[idx].init(arg_node)!;
         }
     }
@@ -260,9 +260,9 @@ fn void? WaylandEnum.init(&self, XmlNode* node)
         foreach (idx, entry_node : entry_list)
         {
             defer catch io::eprintfn(
-                "Error parsing entry in enum %s",
-                self.name
-            );
+                    "Error parsing entry in enum %s",
+                    self.name
+                    );
             self.entries[idx].init(entry_node)!;
         }
     }
@@ -320,10 +320,10 @@ fn WaylandProtocol*? generate_tree(Path file)
     }
 
     protocol.interfaces = alloc::new_array(
-        tmem,
-        WaylandInterface,
-        interface_list.len()
-    );
+            tmem,
+            WaylandInterface,
+            interface_list.len()
+            );
 
     foreach (idx, iface_node : interface_list)
     {

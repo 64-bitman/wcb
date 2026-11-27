@@ -25,9 +25,9 @@ fn void? valid_name(String name, bool allow_digit_start = false) @private
         if (!c.is_alnum() && c != '_')
         {
             io::eprintfn(
-                "Name '%s' can only contain a-x, A-Z, or underscore",
-                name
-            );
+                    "Name '%s' can only contain a-x, A-Z, or underscore",
+                    name
+                    );
             return NOT_VALID~;
         }
     }
@@ -40,10 +40,10 @@ fn void? valid_version(uint version, bool since) @private
     if (version == 0)
     {
         io::eprintfn(
-            "Invalid %s number %d",
-            since ? "since" : "version",
-            version
-        );
+                "Invalid %s number %d",
+                since ? "since" : "version",
+                version
+                );
         return NOT_VALID~;
     }
 }
@@ -137,8 +137,8 @@ fn void? validate_tree(WaylandProtocol* protocol)
                             if (has_newid)
                             {
                                 io::eprintfn(
-                                    "Can only have most one new_id argument"
-                                );
+                                        "Can only have most one new_id argument"
+                                        );
                                 return NOT_VALID~;
                             }
                             has_newid = true;
@@ -150,33 +150,33 @@ fn void? validate_tree(WaylandProtocol* protocol)
                     // "interface" attribute only valid when arg type is
                     // "object" or "new_id".
                     if (arg.iface.len > 0 && arg.type != "object"
-                        && arg.type != "new_id")
+                            && arg.type != "new_id")
                     {
                         io::eprintfn(
-                            "attribute 'interface' may only be defined for arg type object and new_id"
-                        );
+                                "attribute 'interface' may only be defined for arg type object and new_id"
+                                );
                         return NOT_VALID~;
                     }
 
                     // "allow-null" attribute only valid when arg type is
                     // "object" or "string".
                     if (arg.allow_null && arg.type != "object"
-                        && arg.type != "string")
+                            && arg.type != "string")
                     {
                         io::eprintfn(
-                            "attribute 'allow-null' may only be defined for arg type object and string"
-                        );
+                                "attribute 'allow-null' may only be defined for arg type object and string"
+                                );
                         return NOT_VALID~;
                     }
 
                     // "enum" attribute only valid when arg type is "int" or
                     // "uint".
                     if (arg.enumeration.len > 0 && arg.type != "int"
-                        && arg.type != "uint")
+                            && arg.type != "uint")
                     {
                         io::eprintfn(
-                            "attribute 'enum' may only be defined for arg type int and uint"
-                        );
+                                "attribute 'enum' may only be defined for arg type int and uint"
+                                );
                         return NOT_VALID~;
                     }
                 }

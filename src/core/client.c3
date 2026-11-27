@@ -6,14 +6,17 @@ import wcb::core::table @public;
 import wcb::core::types;
 import wcb::protocol::client::wayland;
 
+alias WcbProxyConnection @local = WcbConnection{WcbProxy};
+alias WcbProxyTable @local = WcbTable{WcbProxy};
+
 struct WcbDisplay (WcbConnectionImpl{WcbProxy})
 {
     inline WlDisplay dpy;
 
-    WcbConnection{WcbProxy} ct;
+    WcbProxyConnection ct;
     Allocator allocator;
 
-    WcbTable{WcbProxy} objects;
+    WcbProxyTable objects;
 
     WcbId errid; // If not 0, then display cannot be used now
     uint errcode;
@@ -22,9 +25,7 @@ struct WcbDisplay (WcbConnectionImpl{WcbProxy})
 
 struct WcbProxy
 {
-    typeid type;
-    WcbId id;
-    WcbVersion version;
+    inline WcbObjectBase{WcbProxy} base;
     WcbDisplay* display;
 }
 
@@ -35,9 +36,9 @@ struct WcbCallback @local
 }
 
 <*
- @param [&inout] io : "IO implementation to use"
- @param [&inout] allocator : "Allocator to use"
-*>
+@param [&inout] io : "IO implementation to use"
+@param [&inout] allocator : "Allocator to use"
+    *>
 fn void WcbDisplay.init(&self, WcbIOImpl io, Allocator allocator)
 {
     self.allocator = allocator;
@@ -50,12 +51,12 @@ fn void WcbDisplay.init(&self, WcbIOImpl io, Allocator allocator)
     self.display = self;
     // Shouldn't fail
     ((WcbProxy*)self).create((WcbProxy*)self, WcbDisplay::typeid, 1)!!;
-    assert(self.dpy.id == 1);
+    assert(self.dpy.base.id == 1);
 }
 
 fn void WcbDisplay.uninit(&self)
 {
-    self.objects.remove(self.dpy.id)!!;
+    self.objects.remove(self.dpy.base.id)!!;
 
     // TODO output a warning if there are active objects remaining?
 
@@ -65,26 +66,26 @@ fn void WcbDisplay.uninit(&self)
 }
 
 <*
- Dispatch any pending events waiting on the socket. This does not block waiting
- for input.
+Dispatch any pending events waiting on the socket. This does not block waiting
+for input.
 
- @param max_events : "Maximum number of events to dispatch"
- @return "Number of events actually dispatched"
- @return? WcbConnection{WcbProxy}.dispatch!
-*>
+@param max_events : "Maximum number of events to dispatch"
+@return "Number of events actually dispatched"
+@return? WcbProxyConnection.dispatch!
+    *>
 fn sz? WcbDisplay.dispatch_pending(&self, sz max_events = sz::max)
 {
     return self.ct.dispatch(max_events);
 }
 
 <*
- Same as dispatch_pending() but block for input if necessary.
+Same as dispatch_pending() but block for input if necessary.
 
- @param max_events : "Maximum number of events to dispatch"
- @return "Number of events actually dispatched"
- @return? WcbDisplay.dispatch_pending!, WcbDisplay.flush!
- @return? WcbConnection{WcbProxy}.poll!
-*>
+@param max_events : "Maximum number of events to dispatch"
+@return "Number of events actually dispatched"
+@return? WcbDisplay.dispatch_pending!, WcbDisplay.flush!
+@return? WcbProxyConnection.poll!
+    *>
 fn sz? WcbDisplay.dispatch(&self, sz max_events = sz::max)
 {
     sz n_dispatched = self.dispatch_pending(max_events: max_events)!;
@@ -106,11 +107,11 @@ fn sz? WcbDisplay.dispatch(&self, sz max_events = sz::max)
 }
 
 <*
- Flush pending requests to the server. This function never blocks.
+Flush pending requests to the server. This function never blocks.
 
- @return "Return true if all data was written, otherwise false"
- @return? WcbConnection{WcbProxy}.flush!
-*>
+@return "Return true if all data was written, otherwise false"
+@return? WcbProxyConnection.flush!
+    *>
 fn bool? WcbDisplay.flush(&self)
 {
     return self.ct.flush();
@@ -123,12 +124,12 @@ fn void? WcbCallback.done(&self, uint data @unused) @dynamic
 }
 
 <*
- Do a roundtrip by sending a wl_display.sync request and waiting for the
- wl_callback event.
+Do a roundtrip by sending a wl_display.sync request and waiting for the
+wl_callback event.
 
- @return "Number of events dispatched"
- @return? types::DISPLAY_ERROR, WcbDisplay.dispatch!, WcbProxy.destroy!
-*>
+@return "Number of events dispatched"
+@return? types::DISPLAY_ERROR, WcbDisplay.dispatch!, WcbProxy.destroy!
+    *>
 fn sz? WcbDisplay.roundtrip(&self)
 {
     WcbCallback callback;
@@ -160,6 +161,7 @@ fn any? WcbDisplay.lookup(&self, WcbId id) @dynamic
 
 fn bool? WcbDisplay.handle(&self, WcbMessage* message) @dynamic
 {
+    // Cast the proxy to the actual type that implements the method.
     WcbProxy* proxy = (WcbProxy*)message.obj;
     any obj_type = any_make(proxy, proxy.type);
     WcbObject obj = (WcbObject)obj_type;
@@ -192,10 +194,12 @@ fn void? WcbDisplay.delete_id(&self, uint id) @dynamic
 }
 
 <*
- @param [&inout] parent : "Parent/factory proxy of this proxy"
- @param version : "Version to use, otherwise inherit parent version"
- @return? WcbTable{WcbProxy}.insert!
-*>
+Initialize the proxy and allocate an id for it.
+
+@param [&inout] parent : "Parent/factory proxy of this proxy"
+@param version : "Version to use, otherwise inherit parent version"
+@return? WcbProxyTable.insert!
+    *>
 fn void? WcbProxy.create(
         &self,
         WcbProxy* parent,
@@ -216,9 +220,11 @@ fn void? WcbProxy.create(
 }
 
 <*
- @param new_id : "New id of proxy to instantiate"
- @return? WcbTable{WcbProxy}.insert_peer!
-*>
+Initialize and setup a proxy created by the server (new_id argument in event).
+
+@param new_id : "New id of proxy to instantiate"
+@return? WcbProxyTable.insert_peer!
+    *>
 fn void? WcbProxy.instantiate(&self, WcbNewId new_id, typeid type)
 {
     WcbProxy* parent = (WcbProxy*)new_id.parent;
@@ -231,8 +237,10 @@ fn void? WcbProxy.instantiate(&self, WcbNewId new_id, typeid type)
 }
 
 <*
- @return? WcbTable{WcbProxy}.replace!
-*>
+Destroy the proxy, it should not be used after
+
+@return? WcbProxyTable.replace!
+    *>
 fn void? WcbProxy.destroy(&self)
 {
     // Don't destroy object immediately, turn it into a zombie and wait for
@@ -242,16 +250,13 @@ fn void? WcbProxy.destroy(&self)
     self.id = 0; // To catch uses of this object after it is destroyed
 }
 
-fn typeid WcbProxy.get_type(&self) @dynamic
-{
-    return self.type;
-}
-
 <*
- @param opcode : "Opcode of message to marshal for this proxy"
- @param ... : "Message arguments, first the types then the values"
- @return? WcbConnection{WcbProxy}.send!
-*>
+Marshal a message for the proxy
+
+@param opcode : "Opcode of message to marshal for this proxy"
+@param ... : "Message arguments, first the types then the values"
+@return? WcbProxyConnection.send!
+    *>
 macro WcbProxy.marshal(&self, WcbHalfWord opcode, ...)
 {
     self.display.ct.send(self.id, opcode, ...$vaarg)!;
