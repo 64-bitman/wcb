@@ -14,11 +14,6 @@ interface WcbConnectionImpl
     fn bool? handle(WcbMessage* message) @optional;
 }
 
-interface WcbObjectImpl
-{
-    fn typeid get_type();
-}
-
 struct WcbConnection
 {
     Allocator allocator;
@@ -145,7 +140,6 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
 
         WcbConnectionImpl impl = self.impl;
         ObjectType* obj;
-        WcbObjectImpl obj_impl; // Implementation of the backing object
         WcbObject obj_iface; // Implementation of the actual protocol object
         WcbInterface* iface;
         WcbMessageDesc* desc;
@@ -174,8 +168,10 @@ fn sz? WcbConnection.dispatch(&self, sz max_dispatch = sz::max)
         }
 
         obj = (ObjectType*)lookup;
-        obj_impl = (WcbObjectImpl)obj;
-        obj_type = lookup.retype_to(obj_impl.get_type());
+$if !$defined(obj.type):
+    $error("Object does not have type member!");
+$endif
+        obj_type = lookup.retype_to(obj.type);
         obj_iface = (WcbObject)obj_type;
         iface = obj_iface.get_interface();
         desc = iface.get_message(opcode)!;

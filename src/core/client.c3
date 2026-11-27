@@ -20,7 +20,7 @@ struct WcbDisplay (WcbConnectionImpl{WcbProxy})
     String errmsg; // Allocated!
 }
 
-struct WcbProxy (WcbObjectImpl{WcbProxy})
+struct WcbProxy
 {
     typeid type;
     WcbId id;
