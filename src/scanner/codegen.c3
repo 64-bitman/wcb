@@ -440,7 +440,7 @@ fn void? print_methods(OutStream out, WaylandInterface* iface) @local
         {
             if (is_registry_bind)
             {
-                print(out, "((%s*)obj).create((WcbProxy*)self", obj_type)!;
+                print(out, "((%s*)obj).create((%s*)self", obj_type, obj_type)!;
                 printni(out, ", obj.type, version: version)!;")!;
             }
             else
@@ -459,6 +459,7 @@ fn void? print_methods(OutStream out, WaylandInterface* iface) @local
             {
                 // Special case for wl_registry.bind
                 printi(out, ", WcbArgType.STRING, WcbArgType.UINT")!;
+                printi(out, ", WcbArgType.NEW_ID")!;
                 continue;
             }
             printi(out, ", WcbArgType.%s", arg.type.to_upper_tcopy())!;
@@ -473,7 +474,8 @@ fn void? print_methods(OutStream out, WaylandInterface* iface) @local
                 if (arg.iface == "")
                 {
                     // wl_registry.bind
-                    printi(out, "((WcbObject)obj).get_interface().name, version")!;
+                    printi(out, "obj.get_interface().name, version,")!;
+                    printi(out, " ((%s*)obj).id", obj_type)!;
                 }
                 else
                 {

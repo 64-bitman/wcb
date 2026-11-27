@@ -1,6 +1,7 @@
 module wcb::examples::list_globals;
 
 import wcb::core::client;
+import wcb::core::types;
 import wcb::protocol::client;
 import wcb::io::socket;
 import std::net::os;
@@ -33,7 +34,14 @@ fn int main(String[] cmdargs)
     display.get_registry(&registry)!!;
 
     display.roundtrip()!!;
-    display.roundtrip()!!;
+    if (catch err = display.roundtrip())
+    {
+        if (err == types::DISPLAY_ERROR)
+        {
+            io::printfn("%s", display.errmsg);
+        }
+        err~!!;
+    }
 
     registry.destroy()!!;
 

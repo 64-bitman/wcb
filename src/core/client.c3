@@ -130,7 +130,7 @@ fn sz? WcbDisplay.roundtrip(&self)
     defer catch {
         if (!callback.got_done) callback.destroy()!!;
     }
-    while (!callback.got_done) n_dispatched += self.dispatch()!;
+    while (self.errid == 0 && !callback.got_done) n_dispatched += self.dispatch()!;
 
     return n_dispatched;
 }
@@ -166,7 +166,7 @@ fn void? WcbDisplay.error(&self, WcbId id, uint code, String msg) @dynamic
 
 // Handle "wl_display.delete_id" event from server. This allows us to actually
 // destroy any proxies (that are zombies).
-fn void? WlDisplay.delete_id(&self, uint id) @dynamic
+fn void? WcbDisplay.delete_id(&self, uint id) @dynamic
 {
     WcbDisplay* display = (WcbDisplay*)self;
     bool flag = false;
