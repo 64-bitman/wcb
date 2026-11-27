@@ -125,18 +125,10 @@ fn sz? WcbDisplay.dispatch(&self, sz max_events = sz::max)
 
         if (res) break;
 
-        (void)self.ct.poll(
-            {
-                .writable = true
-            }
-        )!;
+        (void)self.ct.poll({.writable = true})!;
     }
 
-    (void)self.ct.poll(
-        {
-            .readable = true
-        }
-    )!;
+    (void)self.ct.poll({.readable = true})!;
 
     return self.dispatch_pending(max_events: max_events)!;
 }
