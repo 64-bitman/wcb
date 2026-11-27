@@ -66,6 +66,24 @@ fn void WcbDisplay.uninit(&self)
 }
 
 <*
+ Get information about the error for this display (if any). Return an empty
+ string if none.
+
+ @param [out] obj_id : "Object id for error"
+ @param [out] errcode : "Error code"
+ @return "Error message as received by the server"
+*>
+fn String WcbDisplay.get_error(&self, WcbId* obj_id, uint* errcode)
+{
+    if (self.errid == 0) return "";
+
+    if (obj_id != null) *obj_id = self.errid;
+    if (errcode != null) *errcode = self.errcode;
+
+    return self.errmsg;
+}
+
+<*
 Dispatch any pending events waiting on the socket. This does not block waiting
 for input.
 
