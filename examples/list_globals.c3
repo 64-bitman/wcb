@@ -8,7 +8,8 @@ import std::net::os;
 import std::io;
 import libc;
 
-WlShm pool;
+WlShm shm;
+WlShmPool pool;
 
 fn void? WlRegistry.global(&self, uint name, String iface, uint version) @dynamic
 {
@@ -16,7 +17,8 @@ fn void? WlRegistry.global(&self, uint name, String iface, uint version) @dynami
 
     if (iface == client::wayland::WL_SHM_INTERFACE.name)
     {
-        self.bind(name, &pool, version)!!;
+        self.bind(name, &shm, version)!!;
+        shm.create_pool(&pool, 200, 100)!!;
     }
 }
 
@@ -33,7 +35,14 @@ fn int main(String[] cmdargs)
 
     display.get_registry(&registry)!!;
 
-    display.roundtrip()!!;
+    if (catch err = display.roundtrip())
+    {
+        if (err == types::DISPLAY_ERROR)
+        {
+            io::printfn("%s", display.errmsg);
+        }
+        err~!!;
+    }
     if (catch err = display.roundtrip())
     {
         if (err == types::DISPLAY_ERROR)

@@ -128,9 +128,11 @@ fn sz? WcbDisplay.roundtrip(&self)
     sz n_dispatched = 0;
 
     defer catch {
-        if (!callback.got_done) callback.destroy()!!;
+        if (!callback.got_done) (void)callback.destroy()!!;
     }
     while (self.errid == 0 && !callback.got_done) n_dispatched += self.dispatch()!;
+
+    if (self.errid != 0) return types::DISPLAY_ERROR~;
 
     return n_dispatched;
 }
@@ -227,7 +229,9 @@ fn void? WcbProxy.instantiate(&self, WcbNewId new_id, typeid type)
 *>
 fn void? WcbProxy.destroy(&self)
 {
-    if (@unlikely(self.display.errid != 0)) return types::DISPLAY_ERROR~;
+    // It is counterintuitive to prevent destroying proxies after a display
+    // error
+    // if (@unlikely(self.display.errid != 0)) return types::DISPLAY_ERROR~;
 
     // Don't destroy object immediately, turn it into a zombie and wait for
     // delete_id event.
