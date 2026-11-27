@@ -74,7 +74,7 @@ fn WcbId? WcbTable.insert(&self, ObjectType* obj)
     {
         // Reuse slot
         slot = &self.slots.entries[i];
-        assert((slot.next_free & 1) == 0);
+        assert(slot.next_free & 1);
 
         self.next_free = (uint)slot.next_free;
     }
